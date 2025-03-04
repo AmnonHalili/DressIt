@@ -49,7 +49,7 @@ class HomeViewModel : ViewModel() {
         loadPosts()
     }
 
-    fun likePost(post: Post) {
+    fun likePost() {
         viewModelScope.launch {
             try {
                 // TODO: Implement like functionality
@@ -59,7 +59,7 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    fun commentOnPost(post: Post) {
+    fun commentOnPost() {
         viewModelScope.launch {
             try {
                 // TODO: Implement comment functionality

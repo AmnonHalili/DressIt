@@ -22,9 +22,9 @@ import com.example.dressit.databinding.FragmentAddPostBinding
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.material.snackbar.Snackbar
-import java.io.File
-import java.io.FileOutputStream
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class AddPostFragment : Fragment() {
     private var _binding: FragmentAddPostBinding? = null
     private val binding get() = _binding!!
@@ -72,12 +72,18 @@ class AddPostFragment : Fragment() {
         }
 
         binding.postButton.setOnClickListener {
-            val description = binding.descriptionEditText.text.toString()
-            if (description.isBlank()) {
-                Snackbar.make(binding.root, "Please add a description", Snackbar.LENGTH_SHORT).show()
-                return@setOnClickListener
+            val title = binding.titleEditText.text.toString().trim()
+            val description = binding.descriptionEditText.text.toString().trim()
+            
+            when {
+                title.isBlank() -> {
+                    Snackbar.make(binding.root, "Please add a title", Snackbar.LENGTH_SHORT).show()
+                }
+                description.isBlank() -> {
+                    Snackbar.make(binding.root, "Please add a description", Snackbar.LENGTH_SHORT).show()
+                }
+                else -> viewModel.createPost(title, description)
             }
-            viewModel.createPost("", description)
         }
     }
 
@@ -114,18 +120,7 @@ class AddPostFragment : Fragment() {
             .centerCrop()
             .into(binding.postImage)
 
-        // Create temporary file
-        val tempFile = File(requireContext().cacheDir, "temp_image.jpg")
-        tempFile.createNewFile()
-
-        // Copy image to temp file
-        requireContext().contentResolver.openInputStream(uri)?.use { input ->
-            FileOutputStream(tempFile).use { output ->
-                input.copyTo(output)
-            }
-        }
-
-        viewModel.setImage(uri, tempFile)
+        viewModel.setImage(uri)
         binding.postButton.isEnabled = true
         binding.uploadImageButton.text = getString(R.string.btn_upload_image)
     }

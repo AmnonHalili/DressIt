@@ -1,6 +1,7 @@
 package com.example.dressit.ui.auth
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -29,7 +30,7 @@ class LoginFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
+        Log.d("LoginFragment", "Fragment created")
         setupClickListeners()
         observeViewModel()
     }
@@ -39,8 +40,11 @@ class LoginFragment : Fragment() {
             val email = binding.emailEditText.text.toString()
             val password = binding.passwordEditText.text.toString()
             
+            Log.d("LoginFragment", "Login button clicked with email: $email")
+            
             if (email.isBlank() || password.isBlank()) {
                 Snackbar.make(binding.root, "Please fill all fields", Snackbar.LENGTH_SHORT).show()
+                Log.d("LoginFragment", "Login validation failed: Empty fields")
                 return@setOnClickListener
             }
             
@@ -48,12 +52,14 @@ class LoginFragment : Fragment() {
         }
 
         binding.registerButton.setOnClickListener {
+            Log.d("LoginFragment", "Register button clicked")
             findNavController().navigate(R.id.action_login_to_register)
         }
     }
 
     private fun observeViewModel() {
         viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
+            Log.d("LoginFragment", "Loading state changed: $isLoading")
             binding.progressBar.isVisible = isLoading
             binding.loginButton.isEnabled = !isLoading
             binding.registerButton.isEnabled = !isLoading
@@ -61,11 +67,13 @@ class LoginFragment : Fragment() {
 
         viewModel.error.observe(viewLifecycleOwner) { error ->
             error?.let {
+                Log.e("LoginFragment", "Error observed: $it")
                 Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG).show()
             }
         }
 
         viewModel.loginSuccess.observe(viewLifecycleOwner) {
+            Log.d("LoginFragment", "Login success observed")
             findNavController().navigate(R.id.action_login_to_home)
         }
     }

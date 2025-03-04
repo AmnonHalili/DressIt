@@ -1,9 +1,8 @@
 package com.example.dressit.ui.profile
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.dressit.data.model.Post
 import com.example.dressit.data.model.User
@@ -11,26 +10,40 @@ import com.example.dressit.data.repository.PostRepository
 import com.example.dressit.data.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class ProfileViewModel(application: Application) : AndroidViewModel(application) {
-    private val userRepository = UserRepository()
-    private val postRepository = PostRepository(application)
+data class ProfileStats(
+    val postsCount: Int = 0,
+    val followersCount: Int = 0,
+    val followingCount: Int = 0
+)
+
+@HiltViewModel
+class ProfileViewModel @Inject constructor(
+    private val userRepository: UserRepository,
+    private val postRepository: PostRepository
+) : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
+
+    private val _user = MutableLiveData<User?>()
+    val user: LiveData<User?> = _user
+
+    private val _posts = MutableLiveData<List<Post>>()
+    val posts: LiveData<List<Post>> = _posts
+
+    private val _stats = MutableLiveData(ProfileStats())
+    val stats: LiveData<ProfileStats> = _stats
 
     private val _loading = MutableLiveData<Boolean>()
     val loading: LiveData<Boolean> = _loading
 
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
-
-    private val _user = MutableLiveData<User>()
-    val user: LiveData<User> = _user
-
-    private val _posts = MutableLiveData<List<Post>>()
-    val posts: LiveData<List<Post>> = _posts
 
     private val _loggedOut = MutableLiveData<Boolean>()
     val loggedOut: LiveData<Boolean> = _loggedOut
@@ -40,17 +53,14 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         loadUserPosts()
     }
 
-    private fun loadUserProfile() {
+    fun loadUserProfile() {
         viewModelScope.launch {
             try {
                 _loading.value = true
-                val currentUser = auth.currentUser
-                if (currentUser != null) {
-                    val user = userRepository.getUserById(currentUser.uid)
-                    user?.let {
-                        _user.value = it
-                    }
-                }
+                val user = userRepository.getCurrentUser()
+                _user.value = user
+
+                user?.let { loadUserPosts(it.id) }
             } catch (e: Exception) {
                 _error.value = e.message
             } finally {
@@ -70,6 +80,28 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 }
                 .launchIn(viewModelScope)
         }
+    }
+
+    private fun loadUserPosts(userId: String) {
+        viewModelScope.launch {
+            try {
+                postRepository.getUserPosts(userId)
+                    .collectLatest { posts: List<Post> ->
+                        _posts.value = posts
+                        updateStats(posts.size)
+                    }
+            } catch (e: Exception) {
+                _error.value = e.message
+            }
+        }
+    }
+
+    private fun updateStats(postsCount: Int) {
+        _stats.value = ProfileStats(
+            postsCount = postsCount,
+            followersCount = 1234, // Placeholder values
+            followingCount = 567   // Placeholder values
+        )
     }
 
     fun refreshPosts() {

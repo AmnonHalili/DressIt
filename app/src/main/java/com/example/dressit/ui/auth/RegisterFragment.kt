@@ -49,6 +49,11 @@ class RegisterFragment : Fragment() {
                 Snackbar.make(binding.root, "Passwords do not match", Snackbar.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+
+            if (!binding.termsCheckbox.isChecked) {
+                Snackbar.make(binding.root, "Please accept the terms and conditions", Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             
             viewModel.register(email, password)
         }
@@ -68,6 +73,7 @@ class RegisterFragment : Fragment() {
         viewModel.error.observe(viewLifecycleOwner) { error ->
             error?.let {
                 Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG).show()
+                viewModel.clearError()
             }
         }
 

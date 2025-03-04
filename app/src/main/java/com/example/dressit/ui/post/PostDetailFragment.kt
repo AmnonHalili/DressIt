@@ -14,7 +14,12 @@ import com.example.dressit.R
 import com.example.dressit.databinding.FragmentPostDetailBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
+import dagger.hilt.android.AndroidEntryPoint
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+@AndroidEntryPoint
 class PostDetailFragment : Fragment() {
     private var _binding: FragmentPostDetailBinding? = null
     private val binding get() = _binding!!
@@ -33,7 +38,6 @@ class PostDetailFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         setupObservers()
         viewModel.loadPost(args.postId)
     }
@@ -42,26 +46,24 @@ class PostDetailFragment : Fragment() {
         viewModel.post.observe(viewLifecycleOwner) { post ->
             post?.let {
                 binding.apply {
-                    tvTitle.text = post.title
-                    tvDescription.text = post.description
-                    tvLikes.text = post.likes.toString()
-                    tvComments.text = "${post.comments.size} comments"
+                    userName.text = post.userName
+                    description.text = post.description
+                    timestamp.text = formatTimestamp(post.timestamp)
 
                     // Load post image
                     Glide.with(requireContext())
                         .load(post.imageUrl)
-                        .into(ivPostImage)
-
-                    // Show edit/delete buttons only if current user is the post owner
-                    val isOwner = viewModel.isCurrentUserPostOwner(post)
-                    btnLike.isVisible = !isOwner
-                    btnComment.isVisible = !isOwner
+                        .into(postImage)
                 }
             }
         }
 
         viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
             binding.progressBar.isVisible = isLoading
+            binding.postImage.isVisible = !isLoading
+            binding.userName.isVisible = !isLoading
+            binding.description.isVisible = !isLoading
+            binding.timestamp.isVisible = !isLoading
         }
 
         viewModel.error.observe(viewLifecycleOwner) { error ->
@@ -77,15 +79,9 @@ class PostDetailFragment : Fragment() {
         }
     }
 
-    private fun showDeleteConfirmationDialog() {
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.dialog_delete_post_title)
-            .setMessage(R.string.dialog_delete_post_message)
-            .setPositiveButton(R.string.btn_delete) { _, _ ->
-                viewModel.deletePost()
-            }
-            .setNegativeButton(R.string.btn_cancel, null)
-            .show()
+    private fun formatTimestamp(timestamp: Long): String {
+        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+        return sdf.format(Date(timestamp))
     }
 
     override fun onDestroyView() {

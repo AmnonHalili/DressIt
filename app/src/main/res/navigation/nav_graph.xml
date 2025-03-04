@@ -2,7 +2,7 @@
 <navigation xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/nav_graph"
-    app:startDestination="@id/loginFragment">
+    app:startDestination="@id/homeFragment">
 
     <fragment
         android:id="@+id/loginFragment"
@@ -39,19 +39,12 @@
         <action
             android:id="@+id/action_home_to_post_detail"
             app:destination="@id/postDetailFragment" />
-        <action
-            android:id="@+id/action_home_to_add_post"
-            app:destination="@id/addPostFragment" />
     </fragment>
 
     <fragment
-        android:id="@+id/postDetailFragment"
-        android:name="com.example.dressit.ui.post.PostDetailFragment"
-        android:label="Post Details">
-        <argument
-            android:name="postId"
-            app:argType="string" />
-    </fragment>
+        android:id="@+id/savedPostsFragment"
+        android:name="com.example.dressit.ui.saved.SavedPostsFragment"
+        android:label="Saved Posts" />
 
     <fragment
         android:id="@+id/addPostFragment"
@@ -59,20 +52,34 @@
         android:label="Add Post" />
 
     <fragment
+        android:id="@+id/notificationsFragment"
+        android:name="com.example.dressit.ui.notifications.NotificationsFragment"
+        android:label="Notifications" />
+
+    <fragment
         android:id="@+id/profileFragment"
         android:name="com.example.dressit.ui.profile.ProfileFragment"
         android:label="Profile">
         <action
-            android:id="@+id/action_profile_to_edit_profile"
-            app:destination="@id/editProfileFragment" />
-        <action
             android:id="@+id/action_profile_to_post_detail"
             app:destination="@id/postDetailFragment" />
         <action
+            android:id="@+id/action_profile_to_edit_profile"
+            app:destination="@id/editProfileFragment" />
+        <action
             android:id="@+id/action_profile_to_login"
             app:destination="@id/loginFragment"
-            app:popUpTo="@id/loginFragment"
+            app:popUpTo="@id/homeFragment"
             app:popUpToInclusive="true" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/postDetailFragment"
+        android:name="com.example.dressit.ui.post.PostDetailFragment"
+        android:label="Post Detail">
+        <argument
+            android:name="postId"
+            app:argType="string" />
     </fragment>
 
     <fragment

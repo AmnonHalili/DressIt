@@ -1,5 +1,6 @@
 package com.example.dressit.ui.auth
 
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -35,9 +36,12 @@ class RegisterViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 _loading.value = true
+                Log.d("RegisterViewModel", "Starting registration for email: $email")
                 auth.createUserWithEmailAndPassword(email, password).await()
+                Log.d("RegisterViewModel", "Registration successful")
                 _registerSuccess.value = true
             } catch (e: FirebaseAuthException) {
+                Log.e("RegisterViewModel", "FirebaseAuthException: ${e.message}, ErrorCode: ${e.errorCode}")
                 _error.value = when (e.errorCode) {
                     "ERROR_INVALID_EMAIL" -> "Invalid email address"
                     "ERROR_WEAK_PASSWORD" -> "Password is too weak"
@@ -45,7 +49,8 @@ class RegisterViewModel : ViewModel() {
                     else -> "Registration failed: ${e.message}"
                 }
             } catch (e: Exception) {
-                _error.value = "An unexpected error occurred"
+                Log.e("RegisterViewModel", "Unexpected error during registration", e)
+                _error.value = "An unexpected error occurred: ${e.message}"
             } finally {
                 _loading.value = false
             }

@@ -47,11 +47,11 @@ class HomeFragment : Fragment() {
                     putString("postId", post.id)
                 })
             },
-            onLikeClick = { post ->
-                viewModel.likePost(post)
+            onLikeClick = { _ ->
+                viewModel.likePost()
             },
-            onCommentClick = { post ->
-                viewModel.commentOnPost(post)
+            onCommentClick = { _ ->
+                viewModel.commentOnPost()
             }
         )
 
@@ -63,7 +63,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun setupSwipeRefresh() {
-        (binding.swipeRefresh as SwipeRefreshLayout).setOnRefreshListener {
+        binding.swipeRefresh.setOnRefreshListener {
             viewModel.refreshPosts()
         }
     }
@@ -71,7 +71,7 @@ class HomeFragment : Fragment() {
     private fun observeViewModel() {
         viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
             binding.progressBar.isVisible = isLoading && postAdapter.currentList.isEmpty()
-            (binding.swipeRefresh as SwipeRefreshLayout).isRefreshing = isLoading && postAdapter.currentList.isNotEmpty()
+            binding.swipeRefresh.isRefreshing = isLoading && postAdapter.currentList.isNotEmpty()
         }
 
         viewModel.error.observe(viewLifecycleOwner) { errorMessage ->

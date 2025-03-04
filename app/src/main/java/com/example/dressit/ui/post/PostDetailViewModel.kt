@@ -1,19 +1,20 @@
 package com.example.dressit.ui.post
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.dressit.data.model.Post
 import com.example.dressit.data.repository.PostRepository
 import com.google.firebase.auth.FirebaseAuth
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class PostDetailViewModel(application: Application) : AndroidViewModel(application) {
-    private val postRepository = PostRepository(application)
-    private var currentPostId: String? = null
-
+@HiltViewModel
+class PostDetailViewModel @Inject constructor(
+    private val postRepository: PostRepository
+) : ViewModel() {
     private val _post = MutableLiveData<Post?>()
     val post: LiveData<Post?> = _post
 
@@ -27,7 +28,6 @@ class PostDetailViewModel(application: Application) : AndroidViewModel(applicati
     val postDeleted: LiveData<Boolean> = _postDeleted
 
     fun loadPost(postId: String) {
-        currentPostId = postId
         viewModelScope.launch {
             try {
                 _loading.value = true

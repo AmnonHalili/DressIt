@@ -1,10 +1,6 @@
 package com.example.dressit.ui.profile
 
-import android.app.Activity
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,17 +12,17 @@ import androidx.navigation.fragment.findNavController
 import com.bumptech.glide.Glide
 import com.example.dressit.databinding.FragmentEditProfileBinding
 import com.google.android.material.snackbar.Snackbar
-import java.io.File
-import java.io.FileOutputStream
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class EditProfileFragment : Fragment() {
     private var _binding: FragmentEditProfileBinding? = null
     private val binding get() = _binding!!
 
     private val viewModel: EditProfileViewModel by viewModels()
 
-    private val getContent = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let { viewModel.setProfileImage(it) }
+    private val getContent = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { viewModel.updateProfileImage(it) }
     }
 
     override fun onCreateView(
@@ -40,40 +36,40 @@ class EditProfileFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         setupClickListeners()
         setupObservers()
         viewModel.loadUserProfile()
     }
 
     private fun setupClickListeners() {
-        binding.btnChangePhoto.setOnClickListener {
+        binding.changePhotoButton.setOnClickListener {
             getContent.launch("image/*")
         }
 
-        binding.btnSave.setOnClickListener {
-            val name = binding.etName.text.toString().trim()
-            viewModel.updateProfile(name)
+        binding.saveButton.setOnClickListener {
+            val username = binding.usernameEditText.text.toString().trim()
+            val bio = binding.bioEditText.text.toString().trim()
+            viewModel.updateProfile(username, bio)
         }
     }
 
     private fun setupObservers() {
-        viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
-            binding.progressBar.isVisible = isLoading
-            binding.btnSave.isEnabled = !isLoading
-            binding.btnChangePhoto.isEnabled = !isLoading
-        }
-
         viewModel.user.observe(viewLifecycleOwner) { user ->
             user?.let {
-                binding.etName.setText(it.username)
-                binding.etEmail.setText(it.email)
+                binding.usernameEditText.setText(it.username)
+                binding.bioEditText.setText(it.bio)
 
                 Glide.with(requireContext())
                     .load(it.profilePicture)
                     .circleCrop()
-                    .into(binding.ivProfileImage)
+                    .into(binding.profileImage)
             }
+        }
+
+        viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
+            binding.saveButton.isEnabled = !isLoading
+            binding.changePhotoButton.isEnabled = !isLoading
+            binding.progressBar.isVisible = isLoading
         }
 
         viewModel.error.observe(viewLifecycleOwner) { error ->
@@ -85,15 +81,6 @@ class EditProfileFragment : Fragment() {
         viewModel.profileUpdated.observe(viewLifecycleOwner) { isUpdated ->
             if (isUpdated) {
                 findNavController().navigateUp()
-            }
-        }
-
-        viewModel.selectedImageUri.observe(viewLifecycleOwner) { uri ->
-            uri?.let {
-                Glide.with(requireContext())
-                    .load(it)
-                    .circleCrop()
-                    .into(binding.ivProfileImage)
             }
         }
     }

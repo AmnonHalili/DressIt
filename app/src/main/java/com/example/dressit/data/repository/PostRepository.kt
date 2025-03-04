@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.viewModelScope
 import com.example.dressit.data.local.AppDatabase
 import com.example.dressit.data.model.Post
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.Flow
@@ -12,9 +13,14 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.onEach
 import java.io.File
 import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
+import android.net.Uri
 
-class PostRepository(private val context: Context) {
-    private val db = FirebaseFirestore.getInstance()
+@Singleton
+class PostRepository @Inject constructor(private val context: Context) {
+    private val auth = FirebaseAuth.getInstance()
+    private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
     private val postDao = AppDatabase.getDatabase(context).postDao()
 
@@ -23,7 +29,7 @@ class PostRepository(private val context: Context) {
             .onEach { 
                 // Refresh in background
                 try {
-                    val posts = db.collection("posts")
+                    val posts = firestore.collection("posts")
                         .get()
                         .await()
                         .documents
@@ -40,7 +46,7 @@ class PostRepository(private val context: Context) {
             .onEach {
                 // Refresh in background
                 try {
-                    val posts = db.collection("posts")
+                    val posts = firestore.collection("posts")
                         .whereEqualTo("userId", userId)
                         .get()
                         .await()
@@ -62,11 +68,8 @@ class PostRepository(private val context: Context) {
 
         // If not found locally, fetch from Firebase
         return try {
-            val post = db.collection("posts")
-                .document(postId)
-                .get()
-                .await()
-                .toObject(Post::class.java)
+            val document = firestore.collection("posts").document(postId).get().await()
+            val post = document.toObject(Post::class.java)
             
             // Cache the post locally
             post?.let { postDao.insertPosts(listOf(it)) }
@@ -88,16 +91,31 @@ class PostRepository(private val context: Context) {
         }
     }
 
-    suspend fun createPost(post: Post) {
-        db.collection("posts")
-            .document(post.id)
-            .set(post)
-            .await()
-        postDao.insertPosts(listOf(post))
+    suspend fun createPost(title: String, description: String, imageUri: Uri): Post {
+        val currentUser = auth.currentUser ?: throw Exception("User not logged in")
+        
+        // Upload image
+        val ref = storage.reference.child("post_images/${UUID.randomUUID()}")
+        ref.putFile(imageUri).await()
+        val imageUrl = ref.downloadUrl.await().toString()
+
+        // Create post
+        val post = Post(
+            id = UUID.randomUUID().toString(),
+            userId = currentUser.uid,
+            userName = currentUser.displayName ?: "",
+            title = title,
+            description = description,
+            imageUrl = imageUrl
+        )
+
+        // Save to Firestore
+        firestore.collection("posts").document(post.id).set(post).await()
+        return post
     }
 
     suspend fun updatePost(post: Post) {
-        db.collection("posts")
+        firestore.collection("posts")
             .document(post.id)
             .set(post)
             .await()
@@ -105,7 +123,17 @@ class PostRepository(private val context: Context) {
     }
 
     suspend fun deletePost(post: Post) {
-        db.collection("posts")
+        // Delete image from storage if exists
+        if (post.imageUrl.isNotEmpty()) {
+            try {
+                storage.getReferenceFromUrl(post.imageUrl).delete().await()
+            } catch (e: Exception) {
+                // Ignore if image doesn't exist
+            }
+        }
+
+        // Delete post from Firestore
+        firestore.collection("posts")
             .document(post.id)
             .delete()
             .await()
