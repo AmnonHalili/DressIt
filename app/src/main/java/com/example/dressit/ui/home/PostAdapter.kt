@@ -1,11 +1,18 @@
 package com.example.dressit.ui.home
 
+import android.graphics.drawable.Drawable
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.DataSource
+import com.bumptech.glide.load.engine.GlideException
+import com.bumptech.glide.request.RequestListener
+import com.bumptech.glide.request.target.Target
+import com.example.dressit.R
 import com.example.dressit.data.model.Post
 import com.example.dressit.databinding.ItemPostBinding
 
@@ -62,9 +69,21 @@ class PostAdapter(
                 tvLikes.text = post.likes.toString()
                 tvComments.text = post.comments.size.toString()
 
+                // Show loading indicator
+                progressBar.visibility = View.VISIBLE
+                ivPostImage.visibility = View.VISIBLE
+
+                // Load image with Glide
                 Glide.with(root)
                     .load(post.imageUrl)
+                    .placeholder(R.drawable.ic_error_placeholder)
+                    .error(R.drawable.ic_error_placeholder)
                     .into(ivPostImage)
+
+                // Hide loading indicator after a short delay
+                root.postDelayed({
+                    progressBar.visibility = View.GONE
+                }, 500)
             }
         }
     }
