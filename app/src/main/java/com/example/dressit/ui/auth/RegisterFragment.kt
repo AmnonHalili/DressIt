@@ -11,7 +11,9 @@ import androidx.navigation.fragment.findNavController
 import com.example.dressit.R
 import com.example.dressit.databinding.FragmentRegisterBinding
 import com.google.android.material.snackbar.Snackbar
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class RegisterFragment : Fragment() {
     private var _binding: FragmentRegisterBinding? = null
     private val binding get() = _binding!!
@@ -39,8 +41,9 @@ class RegisterFragment : Fragment() {
             val email = binding.emailEditText.text.toString()
             val password = binding.passwordEditText.text.toString()
             val confirmPassword = binding.confirmPasswordEditText.text.toString()
+            val username = binding.nameEditText.text.toString()
             
-            if (email.isBlank() || password.isBlank() || confirmPassword.isBlank()) {
+            if (email.isBlank() || password.isBlank() || confirmPassword.isBlank() || username.isBlank()) {
                 Snackbar.make(binding.root, "Please fill all fields", Snackbar.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -55,7 +58,7 @@ class RegisterFragment : Fragment() {
                 return@setOnClickListener
             }
             
-            viewModel.register(email, password)
+            viewModel.register(email, password, username)
         }
 
         binding.loginButton.setOnClickListener {

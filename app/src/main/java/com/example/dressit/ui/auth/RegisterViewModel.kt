@@ -5,12 +5,21 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.dressit.data.model.User
+import com.example.dressit.data.repository.AuthManager
+import com.example.dressit.data.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
 
-class RegisterViewModel : ViewModel() {
+@HiltViewModel
+class RegisterViewModel @Inject constructor(
+    private val userRepository: UserRepository,
+    private val authManager: AuthManager
+) : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
 
     private val _loading = MutableLiveData<Boolean>()
@@ -22,8 +31,15 @@ class RegisterViewModel : ViewModel() {
     private val _registerSuccess = MutableLiveData<Boolean>()
     val registerSuccess: LiveData<Boolean> = _registerSuccess
 
-    fun register(email: String, password: String) {
-        if (email.isBlank() || password.isBlank()) {
+    init {
+        // בדוק אם המשתמש כבר מחובר
+        if (authManager.isLoggedIn()) {
+            _registerSuccess.value = true
+        }
+    }
+
+    fun register(email: String, password: String, username: String) {
+        if (email.isBlank() || password.isBlank() || username.isBlank()) {
             _error.value = "Please fill in all fields"
             return
         }
@@ -37,8 +53,23 @@ class RegisterViewModel : ViewModel() {
             try {
                 _loading.value = true
                 Log.d("RegisterViewModel", "Starting registration for email: $email")
-                auth.createUserWithEmailAndPassword(email, password).await()
+                
+                val result = auth.createUserWithEmailAndPassword(email, password).await()
                 Log.d("RegisterViewModel", "Registration successful")
+                
+                // Create user in Firestore
+                result.user?.let { firebaseUser ->
+                    val user = User(
+                        id = firebaseUser.uid,
+                        username = username,
+                        email = email
+                    )
+                    userRepository.createUser(user)
+                    
+                    // שמירת מצב ההתחברות
+                    authManager.saveUserSession(firebaseUser.uid)
+                }
+                
                 _registerSuccess.value = true
             } catch (e: FirebaseAuthException) {
                 Log.e("RegisterViewModel", "FirebaseAuthException: ${e.message}, ErrorCode: ${e.errorCode}")

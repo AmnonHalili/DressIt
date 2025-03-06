@@ -23,10 +23,11 @@
     <string name="title_my_posts">My Posts</string>
     
     <!-- Posts -->
-    <string name="hint_post_description">Write something about your outfit…</string>
+    <string name="hint_post_description">Write a description...</string>
     <string name="btn_upload_image">Upload Image</string>
+    <string name="btn_change_image">Change Image</string>
     <string name="btn_post">Post</string>
-    <string name="msg_post_success">Post uploaded successfully</string>
+    <string name="msg_post_success">Post created successfully!</string>
     <string name="msg_post_error">Error uploading post</string>
     
     <!-- New strings from the code block -->

@@ -37,19 +37,29 @@
         android:name="com.example.dressit.ui.home.HomeFragment"
         android:label="Home">
         <action
-            android:id="@+id/action_home_to_post_detail"
+            android:id="@+id/action_navigation_home_to_post_detail_fragment"
             app:destination="@id/postDetailFragment" />
     </fragment>
 
     <fragment
         android:id="@+id/savedPostsFragment"
         android:name="com.example.dressit.ui.saved.SavedPostsFragment"
-        android:label="Saved Posts" />
+        android:label="Saved Posts">
+        <action
+            android:id="@+id/action_navigation_saved_to_post_detail_fragment"
+            app:destination="@id/postDetailFragment" />
+    </fragment>
 
     <fragment
         android:id="@+id/addPostFragment"
         android:name="com.example.dressit.ui.post.AddPostFragment"
-        android:label="Add Post" />
+        android:label="Add Post">
+        <action
+            android:id="@+id/action_add_post_to_home"
+            app:destination="@id/homeFragment"
+            app:popUpTo="@id/homeFragment"
+            app:popUpToInclusive="true" />
+    </fragment>
 
     <fragment
         android:id="@+id/notificationsFragment"
@@ -77,6 +87,22 @@
         android:id="@+id/postDetailFragment"
         android:name="com.example.dressit.ui.post.PostDetailFragment"
         android:label="Post Detail">
+        <argument
+            android:name="postId"
+            app:argType="string" />
+        <argument
+            android:name="openComments"
+            app:argType="boolean"
+            android:defaultValue="false" />
+        <action
+            android:id="@+id/action_post_detail_to_edit_post"
+            app:destination="@id/editPostFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/editPostFragment"
+        android:name="com.example.dressit.ui.post.EditPostFragment"
+        android:label="Edit Post">
         <argument
             android:name="postId"
             app:argType="string" />

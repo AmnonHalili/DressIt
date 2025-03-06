@@ -25,7 +25,7 @@ class MapViewModel : BaseViewModel() {
             repository.getAllPosts()
                 .onEach { posts ->
                     // Filter out posts without location
-                    _posts.value = posts.filter { it.location != null }
+                    _posts.value = posts.filter { it.latitude != null && it.longitude != null }
                 }
                 .catch { exception ->
                     handleError(exception as Exception)

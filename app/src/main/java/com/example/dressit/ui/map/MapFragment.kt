@@ -94,8 +94,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         viewModel.posts.observe(viewLifecycleOwner) { posts ->
             googleMap?.clear()
             posts.forEach { post ->
-                post.location?.let { location ->
-                    val position = LatLng(location.latitude, location.longitude)
+                if (post.latitude != null && post.longitude != null) {
+                    val position = LatLng(post.latitude, post.longitude)
                     googleMap?.addMarker(
                         MarkerOptions()
                             .position(position)

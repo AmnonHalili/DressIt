@@ -12,19 +12,22 @@ data class Post(
     val title: String = "",
     val description: String = "",
     val imageUrl: String = "",
-    val location: GeoPoint? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val timestamp: Long = System.currentTimeMillis(),
+    val lastUpdated: Long = System.currentTimeMillis(),
     val likes: Int = 0,
-    val comments: List<Comment> = emptyList()
+    val likedBy: List<String> = emptyList(),
+    val comments: List<Comment> = emptyList(),
+    val savedBy: List<String> = emptyList(),
+    val rentalPrice: Double = 0.0,
+    val currency: String = "ILS"
 )
 
 data class Comment(
-    val userId: String,
-    val text: String,
+    val id: String = "",
+    val userId: String = "",
+    val userName: String = "",
+    val text: String = "",
     val timestamp: Long = System.currentTimeMillis()
-)
-
-data class GeoPoint(
-    val latitude: Double,
-    val longitude: Double
 ) 

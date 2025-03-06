@@ -9,11 +9,17 @@ interface PostDao {
     @Query("SELECT * FROM posts ORDER BY timestamp DESC")
     fun getAllPosts(): Flow<List<Post>>
 
+    @Query("SELECT * FROM posts ORDER BY timestamp DESC")
+    suspend fun getAllPostsSync(): List<Post>
+
     @Query("SELECT * FROM posts WHERE userId = :userId ORDER BY timestamp DESC")
     fun getUserPosts(userId: String): Flow<List<Post>>
 
     @Query("SELECT * FROM posts WHERE id = :postId LIMIT 1")
     suspend fun getPostById(postId: String): Post?
+
+    @Query("SELECT * FROM posts ORDER BY timestamp DESC")
+    fun getSavedPosts(): Flow<List<Post>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPosts(posts: List<Post>)
@@ -26,4 +32,7 @@ interface PostDao {
 
     @Query("DELETE FROM posts")
     suspend fun deleteAllPosts()
+
+    @Query("DELETE FROM posts WHERE userId = :userId")
+    suspend fun deleteUserPosts(userId: String)
 } 

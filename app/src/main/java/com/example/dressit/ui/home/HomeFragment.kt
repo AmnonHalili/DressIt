@@ -1,9 +1,14 @@
 package com.example.dressit.ui.home
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -14,75 +19,191 @@ import com.example.dressit.R
 import com.example.dressit.databinding.FragmentHomeBinding
 import com.google.android.material.snackbar.Snackbar
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import kotlinx.coroutines.launch
+import dagger.hilt.android.AndroidEntryPoint
+import com.example.dressit.data.local.AppDatabase
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
 
+@AndroidEntryPoint
 class HomeFragment : Fragment() {
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
 
-    private lateinit var viewModel: HomeViewModel
+    private val viewModel: HomeViewModel by viewModels()
     private lateinit var postAdapter: PostAdapter
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        Log.d("HomeFragment", "onCreate called")
+        setHasOptionsMenu(true)
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        Log.d("HomeFragment", "onCreateView called")
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        
-        viewModel = ViewModelProvider(this).get(HomeViewModel::class.java)
+        Log.d("HomeFragment", "onViewCreated called")
         setupRecyclerView()
         setupSwipeRefresh()
+        setupFeedTypeChips()
         observeViewModel()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        inflater.inflate(R.menu.home_menu, menu)
+        super.onCreateOptionsMenu(menu, inflater)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_force_refresh -> {
+                showForceRefreshDialog()
+                true
+            }
+            R.id.action_reset_database -> {
+                showResetDatabaseDialog()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun showForceRefreshDialog() {
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("רענון מאולץ")
+            .setMessage("פעולה זו תנקה את בסיס הנתונים המקומי ותטען את כל הפוסטים מחדש מהשרת. האם להמשיך?")
+            .setPositiveButton("כן") { _, _ ->
+                viewModel.forceRefreshAndClearLocalData()
+                Snackbar.make(binding.root, "מרענן נתונים מהשרת...", Snackbar.LENGTH_LONG).show()
+            }
+            .setNegativeButton("לא", null)
+            .create()
+        dialog.show()
+    }
+    
+    private fun showResetDatabaseDialog() {
+        Log.d("HomeFragment", "Showing reset database dialog")
+        AlertDialog.Builder(requireContext())
+            .setTitle("איפוס בסיס נתונים")
+            .setMessage("האם אתה בטוח שברצונך לאפס את בסיס הנתונים המקומי?")
+            .setPositiveButton("איפוס") { _, _ ->
+                Log.d("HomeFragment", "User confirmed database reset")
+                viewModel.clearLocalDatabase()
+                Snackbar.make(
+                    binding.root,
+                    "בסיס הנתונים אופס בהצלחה",
+                    Snackbar.LENGTH_LONG
+                ).show()
+            }
+            .setNegativeButton("ביטול") { dialog, _ ->
+                Log.d("HomeFragment", "User cancelled database reset")
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun setupFeedTypeChips() {
+        binding.chipAllPosts.setOnClickListener {
+            viewModel.setFeedType(FeedType.ALL_POSTS)
+        }
+        
+        binding.chipFollowing.setOnClickListener {
+            viewModel.setFeedType(FeedType.FOLLOWING)
+        }
+        
+        // עדכון הצ'יפ הנבחר לפי הסטייט הנוכחי
+        viewModel.currentFeedType.observe(viewLifecycleOwner) { feedType ->
+            when (feedType) {
+                FeedType.ALL_POSTS -> binding.chipAllPosts.isChecked = true
+                FeedType.FOLLOWING -> binding.chipFollowing.isChecked = true
+            }
+        }
     }
 
     private fun setupRecyclerView() {
         postAdapter = PostAdapter(
             onPostClick = { post ->
-                findNavController().navigate(R.id.action_home_to_post_detail, Bundle().apply {
-                    putString("postId", post.id)
-                })
+                // ניווט לפרטי הפוסט
+                val action = HomeFragmentDirections.actionNavigationHomeToPostDetailFragment(post.id)
+                findNavController().navigate(action)
             },
-            onLikeClick = { _ ->
-                viewModel.likePost()
+            onLikeClick = { post ->
+                viewModel.toggleLike(post)
             },
-            onCommentClick = { _ ->
-                viewModel.commentOnPost()
+            onCommentClick = { post ->
+                val action = HomeFragmentDirections.actionNavigationHomeToPostDetailFragment(post.id)
+                findNavController().navigate(action)
+            },
+            onSaveClick = { post ->
+                viewModel.toggleSave(post)
             }
         )
-
-        binding.postsRecyclerView.apply {
-            adapter = postAdapter
+        
+        binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())
-            setHasFixedSize(true)
+            adapter = postAdapter
         }
     }
 
     private fun setupSwipeRefresh() {
+        Log.d("HomeFragment", "Setting up SwipeRefresh")
         binding.swipeRefresh.setOnRefreshListener {
+            Log.d("HomeFragment", "SwipeRefresh triggered")
             viewModel.refreshPosts()
         }
     }
 
     private fun observeViewModel() {
+        Log.d("HomeFragment", "Setting up ViewModel observers")
         viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
-            binding.progressBar.isVisible = isLoading && postAdapter.currentList.isEmpty()
-            binding.swipeRefresh.isRefreshing = isLoading && postAdapter.currentList.isNotEmpty()
+            Log.d("HomeFragment", "Loading state changed: $isLoading")
+            binding.swipeRefresh.isRefreshing = isLoading
+            binding.progressBar.isVisible = isLoading
         }
 
         viewModel.error.observe(viewLifecycleOwner) { errorMessage ->
             errorMessage?.let {
-                Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG).show()
+                Log.e("HomeFragment", "Error received: $it")
+                
+                // בדיקה אם השגיאה קשורה ל-Room schema
+                if (it.contains("Room cannot verify the data integrity") || it.contains("schema")) {
+                    val snackbar = Snackbar.make(
+                        binding.root,
+                        "שגיאה בבסיס הנתונים. נסה לאפס את בסיס הנתונים.",
+                        Snackbar.LENGTH_LONG
+                    )
+                    snackbar.setAction("אפס") {
+                        showResetDatabaseDialog()
+                    }
+                    snackbar.show()
+                } else {
+                    Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG).show()
+                }
             }
         }
 
         viewModel.posts.observe(viewLifecycleOwner) { posts ->
-            binding.emptyView.isVisible = posts.isEmpty()
+            Log.d("HomeFragment", "Received ${posts.size} posts")
             postAdapter.submitList(posts)
+            binding.emptyView.isVisible = posts.isEmpty()
+            binding.recyclerView.isVisible = posts.isNotEmpty()
+            
+            if (posts.isEmpty()) {
+                Log.d("HomeFragment", "No posts found, showing empty view")
+            }
         }
     }
 

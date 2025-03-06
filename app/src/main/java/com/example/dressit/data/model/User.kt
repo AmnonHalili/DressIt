@@ -6,5 +6,7 @@ data class User(
     val email: String = "",
     val bio: String = "",
     val profilePicture: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val followers: List<String> = emptyList(),
+    val following: List<String> = emptyList()
 ) 

@@ -12,7 +12,9 @@ import androidx.navigation.fragment.findNavController
 import com.example.dressit.R
 import com.example.dressit.databinding.FragmentLoginBinding
 import com.google.android.material.snackbar.Snackbar
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class LoginFragment : Fragment() {
     private var _binding: FragmentLoginBinding? = null
     private val binding get() = _binding!!

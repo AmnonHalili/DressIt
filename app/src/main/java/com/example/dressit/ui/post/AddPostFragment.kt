@@ -2,17 +2,25 @@ package com.example.dressit.ui.post
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
@@ -20,9 +28,16 @@ import com.bumptech.glide.Glide
 import com.example.dressit.R
 import com.example.dressit.databinding.FragmentAddPostBinding
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.Priority
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
+import java.io.IOException
+import java.util.*
+import android.os.Looper
 
 @AndroidEntryPoint
 class AddPostFragment : Fragment() {
@@ -32,20 +47,32 @@ class AddPostFragment : Fragment() {
     private val viewModel: AddPostViewModel by viewModels()
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
-    private val getContent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            getCurrentLocation()
+        } else {
+            Snackbar.make(
+                binding.root,
+                "הרשאת מיקום נדרשת לשמירת מיקום השמלה",
+                Snackbar.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private val pickImageLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
                 handleSelectedImage(uri)
             }
         }
     }
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            getCurrentLocation()
-        }
+    companion object {
+        private const val TAG = "AddPostFragment"
     }
 
     override fun onCreateView(
@@ -59,11 +86,46 @@ class AddPostFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
+        
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
-        checkLocationPermission()
+        
+        setupTextChangeListeners()
         setupClickListeners()
-        observeViewModel()
+        setupObservers()
+        
+        // בקשת מיקום אוטומטית עם פתיחת המסך
+        checkLocationPermission()
+    }
+
+    private fun setupTextChangeListeners() {
+        // Add text change listeners for real-time validation
+        binding.titleEditText.doAfterTextChanged { text ->
+            validateForm()
+        }
+
+        binding.descriptionEditText.doAfterTextChanged { text ->
+            validateForm()
+        }
+        
+        binding.priceEditText.doAfterTextChanged { text ->
+            validateForm()
+        }
+
+        // Initially disable post button
+        binding.postButton.isEnabled = false
+    }
+
+    private fun validateForm() {
+        val title = binding.titleEditText.text.toString().trim()
+        val description = binding.descriptionEditText.text.toString().trim()
+        val priceText = binding.priceEditText.text.toString().trim()
+        
+        val isValid = title.length >= 3 && 
+                      description.length >= 10 && 
+                      priceText.isNotEmpty() &&
+                      viewModel.imageSelected.value == true
+        
+        binding.postButton.isEnabled = isValid
     }
 
     private fun setupClickListeners() {
@@ -71,46 +133,102 @@ class AddPostFragment : Fragment() {
             openImagePicker()
         }
 
+        binding.postImage.setOnClickListener {
+            openImagePicker()
+        }
+
         binding.postButton.setOnClickListener {
-            val title = binding.titleEditText.text.toString().trim()
-            val description = binding.descriptionEditText.text.toString().trim()
-            
-            when {
-                title.isBlank() -> {
-                    Snackbar.make(binding.root, "Please add a title", Snackbar.LENGTH_SHORT).show()
-                }
-                description.isBlank() -> {
-                    Snackbar.make(binding.root, "Please add a description", Snackbar.LENGTH_SHORT).show()
-                }
-                else -> viewModel.createPost(title, description)
+            if (isNetworkAvailable()) {
+                submitPost()
+            } else {
+                Snackbar.make(binding.root, "אין חיבור לאינטרנט, אנא בדוק את החיבור ונסה שוב", Snackbar.LENGTH_LONG).show()
+            }
+        }
+
+        binding.refreshLocationButton.setOnClickListener {
+            checkLocationPermission()
+        }
+
+        binding.viewLocationButton.setOnClickListener {
+            viewModel.currentLocation?.let { location ->
+                openLocationOnMap(location.latitude, location.longitude)
             }
         }
     }
+    
+    private fun submitPost() {
+        val title = binding.titleEditText.text.toString().trim()
+        val description = binding.descriptionEditText.text.toString().trim()
+        val priceText = binding.priceEditText.text.toString().trim()
+        
+        try {
+            val price = priceText.toDoubleOrNull() ?: 0.0
+            viewModel.createPost(title, description, price)
+        } catch (e: NumberFormatException) {
+            Snackbar.make(binding.root, "אנא הזן מחיר תקין", Snackbar.LENGTH_SHORT).show()
+        }
+    }
 
-    private fun observeViewModel() {
+    private fun setupObservers() {
         viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
             binding.progressBar.isVisible = isLoading
             binding.postButton.isEnabled = !isLoading
-            binding.uploadImageButton.isEnabled = !isLoading
+            binding.titleEditText.isEnabled = !isLoading
+            binding.descriptionEditText.isEnabled = !isLoading
+            binding.priceEditText.isEnabled = !isLoading
+            binding.postImage.isEnabled = !isLoading
         }
 
         viewModel.error.observe(viewLifecycleOwner) { error ->
             error?.let {
-                Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG).show()
+                Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG)
+                    .setAction("Retry") {
+                        // Clear the error
+                        viewModel.clearError()
+                        // Check network connectivity
+                        if (isNetworkAvailable()) {
+                            // Retry the last action
+                            binding.postButton.performClick()
+                        } else {
+                            Snackbar.make(binding.root, "No internet connection", Snackbar.LENGTH_SHORT).show()
+                        }
+                    }
+                    .show()
             }
         }
 
-        viewModel.postCreated.observe(viewLifecycleOwner) { isCreated ->
-            if (isCreated) {
-                Snackbar.make(binding.root, R.string.msg_post_success, Snackbar.LENGTH_SHORT).show()
-                findNavController().navigateUp()
+        viewModel.postCreated.observe(viewLifecycleOwner) { created ->
+            if (created) {
+                findNavController().navigate(R.id.action_add_post_to_home)
+                Snackbar.make(requireActivity().findViewById(android.R.id.content), 
+                    "הפוסט פורסם בהצלחה!", Snackbar.LENGTH_LONG).show()
+            }
+        }
+
+        viewModel.imageSelected.observe(viewLifecycleOwner) { isSelected ->
+            validateForm()
+            binding.uploadImageButton.text = if (isSelected) {
+                getString(R.string.btn_change_image)
+            } else {
+                getString(R.string.btn_upload_image)
             }
         }
     }
 
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        return capabilities != null && (
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        )
+    }
+
     private fun openImagePicker() {
         val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
-        getContent.launch(intent)
+        pickImageLauncher.launch(intent)
     }
 
     private fun handleSelectedImage(uri: Uri) {
@@ -121,8 +239,6 @@ class AddPostFragment : Fragment() {
             .into(binding.postImage)
 
         viewModel.setImage(uri)
-        binding.postButton.isEnabled = true
-        binding.uploadImageButton.text = getString(R.string.btn_upload_image)
     }
 
     private fun checkLocationPermission() {
@@ -136,9 +252,9 @@ class AddPostFragment : Fragment() {
             shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) -> {
                 Snackbar.make(
                     binding.root,
-                    "Location permission is required to add location to your post",
-                    Snackbar.LENGTH_LONG
-                ).setAction("Grant") {
+                    "הרשאת מיקום נדרשת כדי לשמור את מיקום השמלה",
+                    Snackbar.LENGTH_INDEFINITE
+                ).setAction("אישור") {
                     requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 }.show()
             }
@@ -149,18 +265,116 @@ class AddPostFragment : Fragment() {
     }
 
     private fun getCurrentLocation() {
-        if (ContextCompat.checkSelfPermission(
+        if (ActivityCompat.checkSelfPermission(
                 requireContext(),
                 Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
         ) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                location?.let {
-                    viewModel.setLocation(it)
+            Snackbar.make(
+                binding.root,
+                "נדרשת הרשאת מיקום כדי לשמור את מיקום השמלה",
+                Snackbar.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        // הצגת סטטוס עדכון מיקום
+        binding.locationStatus.text = "מקבל מיקום נוכחי..."
+
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { location: Location? ->
+                if (location != null) {
+                    viewModel.setLocation(location)
+                    updateLocationUI(location)
+                } else {
+                    // אם המיקום האחרון אינו זמין, בקש עדכון מיקום חדש
+                    requestNewLocationData()
                 }
             }
+            .addOnFailureListener { e ->
+                binding.locationStatus.text = "שגיאה בקבלת מיקום: ${e.message}"
+                Log.e(TAG, "Error getting location", e)
+            }
+    }
+
+    private fun requestNewLocationData() {
+        val locationRequest = LocationRequest.Builder(5000)
+            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+            .setIntervalMillis(5000)
+            .setMaxUpdateDelayMillis(10000)
+            .setMaxUpdates(1)
+            .build()
+
+        if (ActivityCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                object : LocationCallback() {
+                    override fun onLocationResult(locationResult: LocationResult) {
+                        val lastLocation = locationResult.lastLocation
+                        if (lastLocation != null) {
+                            viewModel.setLocation(lastLocation)
+                            updateLocationUI(lastLocation)
+                        } else {
+                            binding.locationStatus.text = "לא ניתן לקבל מיקום. נסה שוב מאוחר יותר"
+                        }
+                    }
+                },
+                Looper.myLooper()
+            )
         }
     }
+
+    private fun updateLocationUI(location: Location) {
+        val geocoder = Geocoder(requireContext(), Locale.getDefault())
+        try {
+            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+            if (addresses != null && addresses.isNotEmpty()) {
+                val address = addresses[0]
+                val addressLine = when {
+                    address.thoroughfare != null -> "${address.thoroughfare}, ${address.locality ?: address.adminArea ?: ""}"
+                    address.locality != null -> address.locality
+                    else -> "${location.latitude.format(4)}, ${location.longitude.format(4)}"
+                }
+                binding.locationStatus.text = "המיקום הנוכחי: $addressLine"
+            } else {
+                binding.locationStatus.text = "המיקום הנוכחי: ${location.latitude.format(4)}, ${location.longitude.format(4)}"
+            }
+            // הפעלת כפתור הצגת מיקום במפה
+            binding.viewLocationButton.isEnabled = true
+        } catch (e: IOException) {
+            binding.locationStatus.text = "המיקום הנוכחי: ${location.latitude.format(4)}, ${location.longitude.format(4)}"
+            binding.viewLocationButton.isEnabled = true
+            Log.e(TAG, "Error getting address from location", e)
+        }
+    }
+
+    private fun openLocationOnMap(latitude: Double, longitude: Double) {
+        val uri = Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude")
+        val mapIntent = Intent(Intent.ACTION_VIEW, uri)
+        mapIntent.setPackage("com.google.android.apps.maps")
+        
+        // בדיקה אם קיימת אפליקציית מפות מתאימה
+        if (mapIntent.resolveActivity(requireActivity().packageManager) != null) {
+            startActivity(mapIntent)
+        } else {
+            // חלופה במקרה שאין אפליקציית מפות
+            val webUri = Uri.parse("https://www.google.com/maps/search/?api=1&query=$latitude,$longitude")
+            val webIntent = Intent(Intent.ACTION_VIEW, webUri)
+            startActivity(webIntent)
+        }
+    }
+
+    private fun Double.format(digits: Int) = String.format(Locale.US, "%.${digits}f", this)
 
     override fun onDestroyView() {
         super.onDestroyView()

@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 1,
-    "identityHash": "46cca1c08c840a17ddf44999cd7e4649",
+    "version": 2,
+    "identityHash": "1e506997d2268259dd2a8043ffaa6e04",
     "entities": [
       {
         "tableName": "posts",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `userId` TEXT NOT NULL, `userName` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `imageUrl` TEXT NOT NULL, `latitude` REAL, `longitude` REAL, `timestamp` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL, `likes` INTEGER NOT NULL, `comments` TEXT NOT NULL, `rentalPrice` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `userId` TEXT NOT NULL, `userName` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `imageUrl` TEXT NOT NULL, `latitude` REAL, `longitude` REAL, `timestamp` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL, `likes` INTEGER NOT NULL, `likedBy` TEXT NOT NULL, `comments` TEXT NOT NULL, `savedBy` TEXT NOT NULL, `rentalPrice` REAL NOT NULL, `currency` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -75,8 +75,20 @@
             "notNull": true
           },
           {
+            "fieldPath": "likedBy",
+            "columnName": "likedBy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
             "fieldPath": "comments",
             "columnName": "comments",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "savedBy",
+            "columnName": "savedBy",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -106,7 +118,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '46cca1c08c840a17ddf44999cd7e4649')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1e506997d2268259dd2a8043ffaa6e04')"
     ]
   }
 }

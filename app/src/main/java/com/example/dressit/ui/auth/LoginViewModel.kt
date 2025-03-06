@@ -5,13 +5,24 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.dressit.data.model.User
+import com.example.dressit.data.repository.AuthManager
+import com.example.dressit.data.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.firestore.FirebaseFirestore
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
 
-class LoginViewModel : ViewModel() {
+@HiltViewModel
+class LoginViewModel @Inject constructor(
+    private val userRepository: UserRepository,
+    private val authManager: AuthManager
+) : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
+    private val firestore = FirebaseFirestore.getInstance()
 
     private val _loading = MutableLiveData<Boolean>()
     val loading: LiveData<Boolean> = _loading
@@ -24,6 +35,10 @@ class LoginViewModel : ViewModel() {
 
     init {
         Log.d("LoginViewModel", "Current user: ${auth.currentUser?.email}")
+        // בדוק אם המשתמש כבר מחובר
+        if (authManager.isLoggedIn()) {
+            _loginSuccess.value = true
+        }
     }
 
     fun login(email: String, password: String) {
@@ -43,6 +58,27 @@ class LoginViewModel : ViewModel() {
                 
                 if (result.user != null) {
                     Log.d("LoginViewModel", "Login successful for user: ${result.user?.email}")
+                    
+                    // שמירת מצב ההתחברות
+                    authManager.saveUserSession(result.user!!.uid)
+                    
+                    // בדוק אם המשתמש קיים ב-Firestore
+                    val userDoc = firestore.collection("users").document(result.user!!.uid).get().await()
+                    if (!userDoc.exists()) {
+                        // אם המשתמש לא קיים, צור אותו
+                        Log.d("LoginViewModel", "Creating new user document in Firestore")
+                        val newUser = User(
+                            id = result.user!!.uid,
+                            email = result.user!!.email ?: "",
+                            username = result.user!!.email?.substringBefore("@") ?: "",
+                            bio = "",
+                            profilePicture = result.user!!.photoUrl?.toString() ?: "",
+                            createdAt = System.currentTimeMillis()
+                        )
+                        userRepository.createUser(newUser)
+                        Log.d("LoginViewModel", "User document created successfully")
+                    }
+                    
                     _loginSuccess.value = true
                 } else {
                     Log.e("LoginViewModel", "Login failed: User is null after successful authentication")
