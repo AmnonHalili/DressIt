@@ -99,6 +99,9 @@ class PostAdapter(
 
         fun bind(post: Post) {
             binding.apply {
+                // הגדרת שם המפרסם מעל התמונה
+                tvPostPublisher.text = post.userName
+                
                 // הגדרת שם המשתמש וכותרת הפוסט
                 tvUserName.text = post.userName
                 tvTitle.text = post.title
