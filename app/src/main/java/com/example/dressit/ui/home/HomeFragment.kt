@@ -58,7 +58,6 @@ class HomeFragment : Fragment() {
         Log.d("HomeFragment", "onViewCreated called")
         setupRecyclerView()
         setupSwipeRefresh()
-        setupFeedTypeChips()
         observeViewModel()
     }
 
@@ -113,24 +112,6 @@ class HomeFragment : Fragment() {
                 dialog.dismiss()
             }
             .show()
-    }
-
-    private fun setupFeedTypeChips() {
-        binding.chipAllPosts.setOnClickListener {
-            viewModel.setFeedType(FeedType.ALL_POSTS)
-        }
-        
-        binding.chipFollowing.setOnClickListener {
-            viewModel.setFeedType(FeedType.FOLLOWING)
-        }
-        
-        // עדכון הצ'יפ הנבחר לפי הסטייט הנוכחי
-        viewModel.currentFeedType.observe(viewLifecycleOwner) { feedType ->
-            when (feedType) {
-                FeedType.ALL_POSTS -> binding.chipAllPosts.isChecked = true
-                FeedType.FOLLOWING -> binding.chipFollowing.isChecked = true
-            }
-        }
     }
 
     private fun setupRecyclerView() {

@@ -19,11 +19,6 @@ import com.google.firebase.auth.FirebaseAuth
 import androidx.lifecycle.switchMap
 import kotlinx.coroutines.flow.first
 
-enum class FeedType {
-    ALL_POSTS,    // כל הפוסטים
-    FOLLOWING     // פוסטים מעוקבים בלבד
-}
-
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val postRepository: PostRepository
@@ -33,9 +28,6 @@ class HomeViewModel @Inject constructor(
     private val _posts = MutableLiveData<List<Post>>(emptyList())
     val posts: LiveData<List<Post>> = _posts
     
-    private val _currentFeedType = MutableLiveData<FeedType>(FeedType.ALL_POSTS)
-    val currentFeedType: LiveData<FeedType> = _currentFeedType
-
     private val _loading = MutableLiveData<Boolean>(false)
     val loading: LiveData<Boolean> = _loading
 
@@ -47,12 +39,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun loadPosts() {
-        val feedType = _currentFeedType.value ?: FeedType.ALL_POSTS
-        
-        when (feedType) {
-            FeedType.ALL_POSTS -> loadAllPosts()
-            FeedType.FOLLOWING -> loadFollowingPosts()
-        }
+        loadAllPosts()
     }
     
     // פונקציה לטעינת כל הפוסטים
@@ -96,84 +83,27 @@ class HomeViewModel @Inject constructor(
         }
     }
     
-    // פונקציה לטעינת פוסטים ממשתמשים שאני עוקב אחריהם
-    private fun loadFollowingPosts() {
-        _loading.value = true
-        _error.value = null
-        
-        Log.d("HomeViewModel", "Loading posts from followed users")
-        
-        // שימוש בפונקציה החדשה מ-PostRepository
-        postRepository.getFollowingPosts()
-            .onEach { posts ->
-                Log.d("HomeViewModel", "Received ${posts.size} posts from followed users")
-                _posts.postValue(posts)
-                _loading.postValue(false)
-            }
-            .catch { exception ->
-                Log.e("HomeViewModel", "Error loading posts from followed users", exception)
-                _error.postValue(exception.message ?: "Unknown error occurred")
-                _loading.postValue(false)
-            }
-            .launchIn(viewModelScope)
-    }
-    
-    // פונקציה להחלפת סוג הFeed
-    fun setFeedType(feedType: FeedType) {
-        if (_currentFeedType.value != feedType) {
-            _currentFeedType.value = feedType
-            loadPosts()
-        }
-    }
-
     fun refreshPosts() {
         _loading.value = true
         _error.value = null
         
-        val feedType = _currentFeedType.value ?: FeedType.ALL_POSTS
+        Log.d("HomeViewModel", "Refreshing posts")
         
-        Log.d("HomeViewModel", "Refreshing posts for feed type: $feedType")
-        
-        when (feedType) {
-            FeedType.ALL_POSTS -> {
-                viewModelScope.launch {
-                    try {
-                        firebaseRepository.getAllPosts()
-                            .collect { remotePosts ->
-                                Log.d("HomeViewModel", "Refresh received ${remotePosts.size} posts from server")
-                                if (remotePosts.isNotEmpty()) {
-                                    postRepository.insertPosts(remotePosts)
-                                    Log.d("HomeViewModel", "Refresh inserted ${remotePosts.size} posts to local database")
-                                }
-                            }
-                    } catch (e: Exception) {
-                        Log.e("HomeViewModel", "Error during refresh posts", e)
-                        _error.postValue(e.message ?: "Failed to refresh posts")
-                    } finally {
-                        _loading.postValue(false)
+        viewModelScope.launch {
+            try {
+                firebaseRepository.getAllPosts()
+                    .collect { remotePosts ->
+                        Log.d("HomeViewModel", "Refresh received ${remotePosts.size} posts from server")
+                        if (remotePosts.isNotEmpty()) {
+                            postRepository.insertPosts(remotePosts)
+                            Log.d("HomeViewModel", "Refresh inserted ${remotePosts.size} posts to local database")
+                        }
                     }
-                }
-            }
-            FeedType.FOLLOWING -> {
-                viewModelScope.launch {
-                    try {
-                        // פשוט נטען מחדש את הפוסטים ממשתמשים שאני עוקב אחריהם
-                        postRepository.getFollowingPosts()
-                            .onEach { posts ->
-                                _posts.postValue(posts)
-                            }
-                            .catch { e ->
-                                Log.e("HomeViewModel", "Error during refresh following posts", e)
-                                _error.postValue(e.message ?: "Failed to refresh posts")
-                            }
-                            .launchIn(viewModelScope)
-                    } catch (e: Exception) {
-                        Log.e("HomeViewModel", "Error during refresh following posts", e)
-                        _error.postValue(e.message ?: "Failed to refresh posts")
-                    } finally {
-                        _loading.postValue(false)
-                    }
-                }
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Error during refresh posts", e)
+                _error.postValue(e.message ?: "Failed to refresh posts")
+            } finally {
+                _loading.postValue(false)
             }
         }
     }

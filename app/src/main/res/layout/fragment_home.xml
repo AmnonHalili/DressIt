@@ -6,40 +6,11 @@
     android:layout_height="match_parent"
     tools:context=".ui.home.HomeFragment">
 
-    <com.google.android.material.chip.ChipGroup
-        android:id="@+id/feed_type_chip_group"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="16dp"
-        app:singleSelection="true"
-        app:selectionRequired="true"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chip_all_posts"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="כל הפוסטים"
-            android:checked="true"
-            app:chipBackgroundColor="@android:color/holo_blue_light" />
-
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chip_following"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="רק מעוקבים"
-            app:chipBackgroundColor="@android:color/holo_blue_light" />
-    </com.google.android.material.chip.ChipGroup>
-
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipe_refresh"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@id/feed_type_chip_group"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <RelativeLayout
