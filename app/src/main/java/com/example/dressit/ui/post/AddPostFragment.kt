@@ -139,33 +139,31 @@ class AddPostFragment : Fragment() {
 
         binding.postButton.setOnClickListener {
             if (isNetworkAvailable()) {
-                submitPost()
+                val title = binding.titleEditText.text.toString().trim()
+                val description = binding.descriptionEditText.text.toString().trim()
+                val priceStr = binding.priceEditText.text.toString().trim()
+                val price = if (priceStr.isNotEmpty()) priceStr.toDouble() else 0.0
+                
+                viewModel.createPost(title, description, price)
             } else {
-                Snackbar.make(binding.root, "אין חיבור לאינטרנט, אנא בדוק את החיבור ונסה שוב", Snackbar.LENGTH_LONG).show()
+                Snackbar.make(binding.root, "אין חיבור לאינטרנט. וודא שאתה מחובר ונסה שוב", Snackbar.LENGTH_LONG).show()
+            }
+        }
+
+        binding.viewLocationButton.setOnClickListener {
+            val location = viewModel.currentLocation
+            if (location != null) {
+                openLocationOnMap(location.latitude, location.longitude)
             }
         }
 
         binding.refreshLocationButton.setOnClickListener {
             checkLocationPermission()
         }
-
-        binding.viewLocationButton.setOnClickListener {
-            viewModel.currentLocation?.let { location ->
-                openLocationOnMap(location.latitude, location.longitude)
-            }
-        }
-    }
-    
-    private fun submitPost() {
-        val title = binding.titleEditText.text.toString().trim()
-        val description = binding.descriptionEditText.text.toString().trim()
-        val priceText = binding.priceEditText.text.toString().trim()
         
-        try {
-            val price = priceText.toDoubleOrNull() ?: 0.0
-            viewModel.createPost(title, description, price)
-        } catch (e: NumberFormatException) {
-            Snackbar.make(binding.root, "אנא הזן מחיר תקין", Snackbar.LENGTH_SHORT).show()
+        // הוספת מאזין לכפתור בחירת מיקום ידנית
+        binding.chooseLocationButton.setOnClickListener {
+            showManualLocationDialog()
         }
     }
 
@@ -375,6 +373,70 @@ class AddPostFragment : Fragment() {
     }
 
     private fun Double.format(digits: Int) = String.format(Locale.US, "%.${digits}f", this)
+
+    // פונקציה להצגת דיאלוג להזנת מיקום ידנית
+    private fun showManualLocationDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_manual_location, null)
+        val addressEditText = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.address_edit_text)
+        
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("הזנת מיקום ידנית")
+            .setView(dialogView)
+            .setPositiveButton("חפש") { _, _ ->
+                val addressText = addressEditText.text.toString().trim()
+                if (addressText.isNotEmpty()) {
+                    searchLocationByAddress(addressText)
+                }
+            }
+            .setNegativeButton("ביטול", null)
+            .create()
+        
+        dialog.show()
+    }
+    
+    // פונקציה לחיפוש מיקום לפי כתובת
+    private fun searchLocationByAddress(address: String) {
+        binding.locationStatus.text = "מחפש את הכתובת..."
+        
+        val geocoder = Geocoder(requireContext(), Locale.getDefault())
+        try {
+            // רצים בתהליכון נפרד כדי לא לחסום את ה-UI
+            Thread {
+                try {
+                    val addresses = geocoder.getFromLocationName(address, 1)
+                    
+                    // חזרה ל-UI thread
+                    activity?.runOnUiThread {
+                        if (addresses != null && addresses.isNotEmpty()) {
+                            val location = Location("manual-input").apply {
+                                latitude = addresses[0].latitude
+                                longitude = addresses[0].longitude
+                            }
+                            
+                            // עדכון המיקום ב-ViewModel
+                            viewModel.setLocation(location)
+                            
+                            // עדכון ממשק המשתמש
+                            updateLocationUI(location)
+                            
+                            Snackbar.make(binding.root, "מיקום נמצא!", Snackbar.LENGTH_SHORT).show()
+                        } else {
+                            binding.locationStatus.text = "לא ניתן למצוא את הכתובת. נסה שנית"
+                            Snackbar.make(binding.root, "לא נמצאה כתובת. נסה להיות ספציפי יותר", Snackbar.LENGTH_LONG).show()
+                        }
+                    }
+                } catch (e: IOException) {
+                    activity?.runOnUiThread {
+                        binding.locationStatus.text = "שגיאה בחיפוש כתובת"
+                        Snackbar.make(binding.root, "שגיאה בחיפוש: ${e.message}", Snackbar.LENGTH_LONG).show()
+                    }
+                }
+            }.start()
+        } catch (e: Exception) {
+            binding.locationStatus.text = "שגיאה בחיפוש כתובת"
+            Snackbar.make(binding.root, "שגיאה: ${e.message}", Snackbar.LENGTH_LONG).show()
+        }
+    }
 
     override fun onDestroyView() {
         super.onDestroyView()

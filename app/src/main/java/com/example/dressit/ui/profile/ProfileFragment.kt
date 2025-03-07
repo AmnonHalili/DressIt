@@ -74,28 +74,51 @@ class ProfileFragment : Fragment() {
         profilePagerAdapter = ProfilePagerAdapter(this)
         binding.viewPager.adapter = profilePagerAdapter
 
-        TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
-            tab.text = when (position) {
-                0 -> "Posts"
-                1 -> "Videos"
-                else -> "Tagged"
-            }
-            tab.setIcon(
-                when (position) {
-                    0 -> R.drawable.ic_grid
-                    1 -> R.drawable.ic_video
-                    else -> R.drawable.ic_tag
-                }
-            )
-        }.attach()
+        // הסתרת ה-TabLayout כיוון שיש רק לשונית אחת
+        binding.tabLayout.visibility = View.GONE
 
         binding.editProfileButton.setOnClickListener {
             findNavController().navigate(R.id.action_profile_to_edit_profile)
         }
 
-        binding.settingsButton.setOnClickListener {
-            viewModel.logout()
+        // עדכון כפתור שלוש הנקודות כדי שיציג תפריט
+        binding.settingsButton.setOnClickListener { view ->
+            showOptionsMenu(view)
         }
+    }
+
+    // פונקציה להצגת תפריט האפשרויות
+    private fun showOptionsMenu(view: View) {
+        val popup = androidx.appcompat.widget.PopupMenu(requireContext(), view)
+        popup.inflate(R.menu.profile_options_menu)
+        
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.action_logout -> {
+                    // התנתקות
+                    viewModel.logout()
+                    true
+                }
+                R.id.action_account_settings -> {
+                    // פעולת הגדרות חשבון
+                    Snackbar.make(binding.root, "הגדרות חשבון - פונקציונליות עתידית", Snackbar.LENGTH_LONG).show()
+                    true
+                }
+                R.id.action_change_password -> {
+                    // פעולת שינוי סיסמה
+                    Snackbar.make(binding.root, "שינוי סיסמה - פונקציונליות עתידית", Snackbar.LENGTH_LONG).show()
+                    true
+                }
+                R.id.action_privacy -> {
+                    // פעולת פרטיות וביטחון
+                    Snackbar.make(binding.root, "פרטיות וביטחון - פונקציונליות עתידית", Snackbar.LENGTH_LONG).show()
+                    true
+                }
+                else -> false
+            }
+        }
+        
+        popup.show()
     }
 
     private fun setupObservers() {

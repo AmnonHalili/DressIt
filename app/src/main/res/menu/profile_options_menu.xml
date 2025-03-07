@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_logout"
+        android:title="Logout" />
+    
+    <item
+        android:id="@+id/action_account_settings"
+        android:title="הגדרות חשבון" />
+    
+    <item
+        android:id="@+id/action_change_password"
+        android:title="שינוי סיסמה" />
+        
+    <item
+        android:id="@+id/action_privacy"
+        android:title="פרטיות וביטחון" />
+</menu> 

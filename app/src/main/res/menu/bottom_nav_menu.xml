@@ -16,9 +16,9 @@
         android:title="" />
 
     <item
-        android:id="@+id/notificationsFragment"
-        android:icon="@drawable/ic_notifications"
-        android:title="Notifications" />
+        android:id="@+id/chartFragment"
+        android:icon="@drawable/ic_calendar"
+        android:title="Chart" />
 
     <item
         android:id="@+id/profileFragment"

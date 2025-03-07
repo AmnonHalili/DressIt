@@ -28,6 +28,7 @@ import com.example.dressit.data.local.AppDatabase
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.example.dressit.ui.post.DateRangePickerDialog
 
 @AndroidEntryPoint
 class HomeFragment : Fragment() {
@@ -130,6 +131,10 @@ class HomeFragment : Fragment() {
             },
             onSaveClick = { post ->
                 viewModel.toggleSave(post)
+            },
+            onChartClick = { post ->
+                // פתיחת דיאלוג בחירת תאריכים
+                showDateRangePicker(post)
             }
         )
         
@@ -188,8 +193,38 @@ class HomeFragment : Fragment() {
         }
     }
 
+    private fun showDateRangePicker(post: com.example.dressit.data.model.Post) {
+        val dialog = DateRangePickerDialog(
+            requireContext(),
+            post,
+            onDateRangeSelected = { startDate, endDate, notes ->
+                // יצירת הזמנה חדשה
+                val chartViewModel = ViewModelProvider(requireActivity())[com.example.dressit.ui.chart.ChartViewModel::class.java]
+                chartViewModel.createBooking(post, startDate, endDate, notes)
+                
+                // הצגת הודעה למשתמש
+                Snackbar.make(binding.root, "ההזמנה נוצרה בהצלחה", Snackbar.LENGTH_LONG).show()
+            }
+        )
+        dialog.show()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d("HomeFragment", "onResume called - refreshing posts")
+        
+        // רענון פוסטים בכל פעם שחוזרים למסך
+        viewModel.refreshPosts()
+        
+        // רענון נוסף לאחר חצי שניה (לתת זמן לפוסטים להתעדכן בשרת)
+        Handler(Looper.getMainLooper()).postDelayed({
+            Log.d("HomeFragment", "Delayed refresh for posts after returning to screen")
+            viewModel.refreshPosts()
+        }, 500)
     }
 } 

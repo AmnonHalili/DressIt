@@ -62,9 +62,13 @@
     </fragment>
 
     <fragment
-        android:id="@+id/notificationsFragment"
-        android:name="com.example.dressit.ui.notifications.NotificationsFragment"
-        android:label="Notifications" />
+        android:id="@+id/chartFragment"
+        android:name="com.example.dressit.ui.chart.ChartFragment"
+        android:label="Chart">
+        <action
+            android:id="@+id/action_navigation_chart_to_post_detail_fragment"
+            app:destination="@id/postDetailFragment" />
+    </fragment>
 
     <fragment
         android:id="@+id/profileFragment"

@@ -28,6 +28,19 @@
                 app:layout_constraintTop_toTopOf="parent"
                 tools:src="@tools:sample/backgrounds/scenic" />
 
+            <ImageButton
+                android:id="@+id/back_button"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_margin="16dp"
+                android:background="@drawable/rounded_corner_background"
+                android:backgroundTint="#88FFFFFF"
+                android:contentDescription="חזור"
+                android:padding="8dp"
+                android:src="@drawable/ic_back_arrow"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
             <TextView
                 android:id="@+id/title"
                 android:layout_width="0dp"
@@ -55,6 +68,23 @@
                 app:layout_constraintTop_toBottomOf="@id/title"
                 tools:text="₪200 להשכרה" />
 
+            <!-- מיקום השמלה -->
+            <TextView
+                android:id="@+id/pickup_location"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="16dp"
+                android:drawableStart="@drawable/ic_location"
+                android:drawablePadding="4dp"
+                android:textSize="14sp"
+                android:gravity="center_vertical"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/rental_price"
+                tools:text="מיקום איסוף: רחוב הרצל 10, תל אביב" />
+
             <TextView
                 android:id="@+id/user_name"
                 android:layout_width="wrap_content"
@@ -64,7 +94,7 @@
                 android:textSize="16sp"
                 android:textStyle="bold"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/rental_price"
+                app:layout_constraintTop_toBottomOf="@id/pickup_location"
                 tools:text="Username" />
 
             <TextView
@@ -101,80 +131,31 @@
                 android:padding="8dp"
                 app:layout_constraintTop_toBottomOf="@id/timestamp">
 
-                <LinearLayout
-                    android:id="@+id/like_layout"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:orientation="vertical">
+                <ImageButton
+                    android:id="@+id/like_button"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_heart_outline"
+                    android:contentDescription="לייק" />
 
-                    <ImageButton
-                        android:id="@+id/like_button"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:src="@android:drawable/btn_star_big_off"
-                        android:contentDescription="לייק" />
+                <ImageButton
+                    android:id="@+id/comment_button"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_comment"
+                    android:contentDescription="תגובה" />
 
-                    <TextView
-                        android:id="@+id/likes_count"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="0 לייקים"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/comment_layout"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:orientation="vertical">
-
-                    <ImageButton
-                        android:id="@+id/comment_button"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:src="@android:drawable/ic_menu_edit"
-                        android:contentDescription="תגובה" />
-
-                    <TextView
-                        android:id="@+id/comments_count"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="0 תגובות"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/save_layout"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:orientation="vertical">
-
-                    <ImageButton
-                        android:id="@+id/save_button"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:src="@android:drawable/ic_menu_save"
-                        android:contentDescription="שמור" />
-
-                    <TextView
-                        android:id="@+id/save_text"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="שמור"
-                        android:textSize="12sp" />
-                </LinearLayout>
+                <ImageButton
+                    android:id="@+id/save_button"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_bookmark_outline"
+                    android:contentDescription="שמור" />
             </LinearLayout>
 
             <!-- אזור התגובות -->

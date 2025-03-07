@@ -1,5 +1,6 @@
 package com.example.dressit.ui.post
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -22,6 +23,13 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.dressit.data.repository.UserRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.graphics.drawable.Drawable
+import android.util.Log
+import androidx.lifecycle.lifecycleScope
 
 @AndroidEntryPoint
 class PostDetailFragment : Fragment() {
@@ -31,6 +39,7 @@ class PostDetailFragment : Fragment() {
     private val viewModel: PostDetailViewModel by viewModels()
     private val args: PostDetailFragmentArgs by navArgs()
     private lateinit var commentAdapter: CommentAdapter
+    private val userRepository = UserRepository()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -68,6 +77,10 @@ class PostDetailFragment : Fragment() {
     }
 
     private fun setupClickListeners() {
+        binding.backButton.setOnClickListener {
+            findNavController().navigateUp()
+        }
+        
         binding.deleteButton.setOnClickListener {
             showDeleteConfirmationDialog()
         }
@@ -118,21 +131,1047 @@ class PostDetailFragment : Fragment() {
                     description.text = post.description
                     timestamp.text = formatTimestamp(post.timestamp)
                     
+                    // טעינת תמונת פרופיל של המשתמש
+                    loadUserProfileImage(post.userId, userName)
+                    
                     // הצגת מחיר השכרה
                     val formattedPrice = formatPrice(post.rentalPrice, post.currency)
                     rentalPrice.text = formattedPrice
                     
-                    // עדכון מספר הלייקים
-                    likesCount.text = "${post.likes} לייקים"
-                    
-                    // עדכון מספר התגובות
-                    commentsCount.text = "${post.comments.size} תגובות"
+                    // עדכון מיקום האיסוף (חדש)
+                    if (post.latitude != null && post.longitude != null) {
+                        try {
+                            val geocoder = android.location.Geocoder(requireContext(), java.util.Locale.getDefault())
+                            val addresses = geocoder.getFromLocation(post.latitude, post.longitude, 1)
+                            if (addresses != null && addresses.isNotEmpty()) {
+                                val address = addresses[0]
+                                val formattedAddress = StringBuilder()
+                                
+                                // בניית כתובת מפורטת ככל האפשר
+                                if (address.thoroughfare != null) {
+                                    formattedAddress.append(address.thoroughfare)
+                                    
+                                    // מספר בית אם קיים
+                                    if (address.subThoroughfare != null) {
+                                        formattedAddress.append(" ").append(address.subThoroughfare)
+                                    }
+                                }
+                                
+                                // הוספת העיר/יישוב
+                                if (address.locality != null) {
+                                    if (formattedAddress.isNotEmpty()) {
+                                        formattedAddress.append(", ")
+                                    }
+                                    formattedAddress.append(address.locality)
+                                } else if (address.subAdminArea != null) {
+                                    if (formattedAddress.isNotEmpty()) {
+                                        formattedAddress.append(", ")
+                                    }
+                                    formattedAddress.append(address.subAdminArea)
+                                } else if (address.adminArea != null) {
+                                    if (formattedAddress.isNotEmpty()) {
+                                        formattedAddress.append(", ")
+                                    }
+                                    formattedAddress.append(address.adminArea)
+                                }
+                                
+                                // אם לא הצלחנו לבנות כתובת משום שאין מספיק נתונים, ננסה את הכתובת הכללית
+                                if (formattedAddress.isEmpty() && address.getAddressLine(0) != null) {
+                                    formattedAddress.append(address.getAddressLine(0))
+                                }
+                                
+                                // אם יש לנו כתובת כלשהי - נציג אותה
+                                if (formattedAddress.isNotEmpty()) {
+                                    pickupLocation.text = "מיקום איסוף: $formattedAddress"
+                                } else {
+                                    // אם אין כתובת מפורטת, נשתמש בשם האיזור או העיר הכי קרובים
+                                    val fallbackAddress = when {
+                                        address.locality != null -> address.locality
+                                        address.subAdminArea != null -> address.subAdminArea
+                                        address.adminArea != null -> address.adminArea
+                                        else -> null
+                                    }
+                                    
+                                    pickupLocation.text = if (fallbackAddress != null) {
+                                        "מיקום איסוף: $fallbackAddress"
+                                    } else {
+                                        "מיקום איסוף זמין - פנה למוכר לפרטים"
+                                    }
+                                }
+                                
+                                // הוספת אפשרות ללחוץ על המיקום כדי לפתוח אותו במפה
+                                pickupLocation.setOnClickListener {
+                                    val mapUrl = "https://maps.google.com/maps?q=${post.latitude},${post.longitude}"
+                                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(mapUrl))
+                                    startActivity(intent)
+                                }
+                                
+                                pickupLocation.visibility = View.VISIBLE
+                            } else {
+                                pickupLocation.text = "מיקום איסוף זמין - פנה למוכר לפרטים"
+                                pickupLocation.visibility = View.VISIBLE
+                            }
+                        } catch (e: Exception) {
+                            // במקרה של שגיאה, נראה הודעה ידידותית ולא את הקואורדינטות
+                            pickupLocation.text = "מיקום איסוף זמין - פנה למוכר לפרטים"
+                            pickupLocation.visibility = View.VISIBLE
+                        }
+                    } else {
+                        // אם אין מיקום, מסתירים את ה-TextView
+                        pickupLocation.visibility = View.GONE
+                    }
                     
                     // עדכון מצב הלייק
                     updateLikeButton(viewModel.isPostLikedByCurrentUser(post))
                     
                     // עדכון מצב השמירה
                     updateSaveButton(viewModel.isPostSavedByCurrentUser(post))
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
+                    
+                    // עדכון רשימת התגובות
+                    commentAdapter = CommentAdapter(
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        postOwnerId = post.userId,
+                        onDeleteClick = { comment ->
+                            viewModel.deleteComment(post.id, comment.id)
+                        }
+                    )
+                    commentsRecyclerView.adapter = commentAdapter
+                    commentAdapter.submitList(post.comments)
                     
                     // עדכון רשימת התגובות
                     commentAdapter = CommentAdapter(
@@ -163,6 +1202,7 @@ class PostDetailFragment : Fragment() {
             binding.postImage.isVisible = !isLoading
             binding.title.isVisible = !isLoading
             binding.rentalPrice.isVisible = !isLoading
+            binding.pickupLocation.isVisible = !isLoading && viewModel.post.value?.latitude != null
             binding.userName.isVisible = !isLoading
             binding.description.isVisible = !isLoading
             binding.timestamp.isVisible = !isLoading
@@ -199,19 +1239,17 @@ class PostDetailFragment : Fragment() {
     
     private fun updateLikeButton(isLiked: Boolean) {
         if (isLiked) {
-            binding.likeButton.setImageResource(android.R.drawable.btn_star_big_on)
+            binding.likeButton.setImageResource(R.drawable.ic_heart_filled)
         } else {
-            binding.likeButton.setImageResource(android.R.drawable.btn_star_big_off)
+            binding.likeButton.setImageResource(R.drawable.ic_heart_outline)
         }
     }
     
     private fun updateSaveButton(isSaved: Boolean) {
         if (isSaved) {
-            binding.saveButton.setImageResource(android.R.drawable.ic_menu_save)
-            binding.saveText.text = "נשמר"
+            binding.saveButton.setImageResource(R.drawable.ic_bookmark_filled)
         } else {
-            binding.saveButton.setImageResource(android.R.drawable.ic_menu_save)
-            binding.saveText.text = "שמור"
+            binding.saveButton.setImageResource(R.drawable.ic_bookmark_outline)
         }
     }
     
@@ -237,6 +1275,51 @@ class PostDetailFragment : Fragment() {
         val format = NumberFormat.getCurrencyInstance(Locale("he", "IL"))
         format.currency = java.util.Currency.getInstance(currency)
         return format.format(price) + " להשכרה"
+    }
+
+    // פונקציה שטוענת את תמונת הפרופיל של המשתמש
+    private fun loadUserProfileImage(userId: String, userNameView: android.widget.TextView) {
+        if (userId.isBlank()) return
+        
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val user = withContext(Dispatchers.IO) {
+                    userRepository.getUserById(userId)
+                }
+                
+                if (user != null && user.profilePicture.isNotEmpty()) {
+                    // טעינת תמונת הפרופיל רק אם קיימת
+                    withContext(Dispatchers.Main) {
+                        Glide.with(requireContext())
+                            .load(user.profilePicture)
+                            .circleCrop() // עיגול של התמונה
+                            .placeholder(R.drawable.ic_profile) // התמונה הזמנית עד שהתמונה האמיתית נטענת
+                            .error(R.drawable.ic_profile) // התמונה שתוצג במקרה של שגיאה
+                            .into(object : com.bumptech.glide.request.target.CustomTarget<Drawable>() {
+                                override fun onResourceReady(
+                                    resource: Drawable,
+                                    transition: com.bumptech.glide.request.transition.Transition<in Drawable>?
+                                ) {
+                                    // הגדרת גודל האייקון
+                                    resource.setBounds(0, 0, 80, 80)
+                                    
+                                    // שמירה על הריווח המקורי
+                                    val drawables = userNameView.compoundDrawables
+                                    userNameView.setCompoundDrawables(resource, drawables[1], drawables[2], drawables[3])
+                                }
+
+                                override fun onLoadCleared(placeholder: Drawable?) {
+                                    // אין צורך לעשות כלום
+                                }
+                            })
+                    }
+                } else {
+                    Log.d("PostDetailFragment", "No profile picture for user $userId or user not found")
+                }
+            } catch (e: Exception) {
+                Log.e("PostDetailFragment", "Error loading profile picture for user $userId", e)
+            }
+        }
     }
 
     override fun onDestroyView() {

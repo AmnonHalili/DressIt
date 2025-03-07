@@ -90,9 +90,9 @@ class AddPostViewModel @Inject constructor(
                 val longitude = currentLocation?.longitude
                 
                 if (latitude != null && longitude != null) {
-                    Log.d("AddPostViewModel", "Including location data: $latitude, $longitude")
+                    Log.d("AddPostViewModel", "Adding post with location data: Lat=$latitude, Long=$longitude")
                 } else {
-                    Log.d("AddPostViewModel", "No location data available")
+                    Log.d("AddPostViewModel", "No location data available for this post")
                 }
                 
                 // Create post with all data in a single call
@@ -105,7 +105,19 @@ class AddPostViewModel @Inject constructor(
                     longitude = longitude
                 )
                 
-                Log.d("AddPostViewModel", "Post created successfully")
+                Log.d("AddPostViewModel", "Post created successfully with ID: ${post.id}")
+                if (post.latitude != null && post.longitude != null) {
+                    Log.d("AddPostViewModel", "Post saved with location: Lat=${post.latitude}, Long=${post.longitude}")
+                }
+                
+                // רענון פוסטים מהשרת אחרי שמירה
+                try {
+                    postRepository.refreshAllPostsFromServer()
+                    Log.d("AddPostViewModel", "Successfully refreshed posts from server after creating post")
+                } catch (e: Exception) {
+                    Log.e("AddPostViewModel", "Error refreshing posts after creation: ${e.message}", e)
+                }
+                
                 _postCreated.value = true
                 Log.d("AddPostViewModel", "Post creation completed successfully")
             } catch (e: FirebaseNetworkException) {

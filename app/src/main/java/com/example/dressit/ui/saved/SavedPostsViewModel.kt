@@ -92,7 +92,15 @@ class SavedPostsViewModel @Inject constructor(
     fun likePost(postId: String) {
         viewModelScope.launch {
             try {
-                postRepository.likePost(postId)
+                val updatedPost = postRepository.likePost(postId)
+                
+                // עדכן את המצב המקומי של הפוסטים כדי לשקף את השינוי מיד
+                _posts.value = _posts.value?.map { post ->
+                    if (post.id == postId) updatedPost else post
+                }
+                
+                // רענון הפוסטים מהשרת
+                refreshSavedPosts()
             } catch (e: Exception) {
                 _error.postValue(e.message ?: "Failed to like post")
             }
@@ -102,7 +110,15 @@ class SavedPostsViewModel @Inject constructor(
     fun savePost(postId: String) {
         viewModelScope.launch {
             try {
-                postRepository.savePost(postId)
+                val updatedPost = postRepository.savePost(postId)
+                
+                // עדכן את המצב המקומי של הפוסטים כדי לשקף את השינוי מיד
+                _posts.value = _posts.value?.map { post ->
+                    if (post.id == postId) updatedPost else post
+                }
+                
+                // רענון הפוסטים מהשרת
+                refreshSavedPosts()
             } catch (e: Exception) {
                 _error.postValue(e.message ?: "Failed to save post")
             }

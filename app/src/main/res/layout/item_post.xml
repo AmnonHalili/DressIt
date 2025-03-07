@@ -18,11 +18,17 @@
             android:id="@+id/tvPostPublisher"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="8dp"
+            android:padding="12dp"
             android:textStyle="bold"
             android:textSize="16sp"
-            android:background="#F5F5F5"
-            android:textColor="@android:color/black"
+            android:drawableStart="@drawable/ic_profile"
+            android:drawablePadding="8dp"
+            android:background="#E6F2FF"
+            android:textColor="#333333"
+            android:textAlignment="viewStart"
+            android:gravity="center_vertical"
+            android:ellipsize="end"
+            android:maxLines="1"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
@@ -91,6 +97,16 @@
                 android:padding="12dp"
                 android:contentDescription="Save" />
 
+            <ImageButton
+                android:id="@+id/btnChart"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_calendar"
+                android:padding="12dp"
+                android:contentDescription="Book" />
+
             <Space
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -136,6 +152,21 @@
                 android:layout_marginTop="1dp"
                 android:textSize="14sp"
                 tools:text="My favorite evening dress" />
+
+            <!-- מיקום הפוסט -->
+            <TextView
+                android:id="@+id/tvLocation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:textSize="12sp"
+                android:textColor="#555555"
+                android:drawableStart="@drawable/ic_location"
+                android:drawablePadding="4dp"
+                android:gravity="center_vertical"
+                android:visibility="gone"
+                tools:text="מיקום: 32.0853, 34.7818" 
+                tools:visibility="visible"/>
         </LinearLayout>
 
         <!-- תיאור הפוסט (מוסתר כברירת מחדל) -->

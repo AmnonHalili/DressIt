@@ -142,8 +142,16 @@ class HomeViewModel @Inject constructor(
         Log.d("HomeViewModel", "Liking post with ID: $postId")
         viewModelScope.launch {
             try {
-                postRepository.likePost(postId)
+                val updatedPost = postRepository.likePost(postId)
                 Log.d("HomeViewModel", "Successfully liked/unliked post with ID: $postId")
+                
+                // עדכן את המצב המקומי של הפוסטים כדי לשקף את השינוי מיד
+                _posts.value = _posts.value?.map { post ->
+                    if (post.id == postId) updatedPost else post
+                }
+                
+                // רענן את הפוסטים מהשרת
+                refreshPosts()
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Error liking post with ID: $postId", e)
                 _error.postValue(e.message ?: "Failed to like post")
@@ -155,8 +163,16 @@ class HomeViewModel @Inject constructor(
         Log.d("HomeViewModel", "Saving post with ID: $postId")
         viewModelScope.launch {
             try {
-                postRepository.savePost(postId)
+                val updatedPost = postRepository.savePost(postId)
                 Log.d("HomeViewModel", "Successfully saved/unsaved post with ID: $postId")
+                
+                // עדכן את המצב המקומי של הפוסטים כדי לשקף את השינוי מיד
+                _posts.value = _posts.value?.map { post ->
+                    if (post.id == postId) updatedPost else post
+                }
+                
+                // רענן את הפוסטים מהשרת
+                refreshPosts()
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Error saving post with ID: $postId", e)
                 _error.postValue(e.message ?: "Failed to save post")
@@ -184,23 +200,11 @@ class HomeViewModel @Inject constructor(
             try {
                 val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return@launch
                 
-                // בדיקה אם המשתמש כבר לייק את הפוסט
-                val likedBy = post.likedBy.toMutableList()
-                val isAlreadyLiked = likedBy.contains(currentUserId)
+                // קריאה לפונקציה הייעודית במקום updatePost
+                postRepository.likePost(post.id)
                 
-                if (isAlreadyLiked) {
-                    likedBy.remove(currentUserId)
-                } else {
-                    likedBy.add(currentUserId)
-                }
-                
-                // עדכון הפוסט עם רשימת הלייקים החדשה
-                val updatedPost = post.copy(
-                    likedBy = likedBy,
-                    likes = likedBy.size
-                )
-                
-                postRepository.updatePost(updatedPost)
+                // רענון הפוסטים כדי לקבל את השינויים
+                refreshPosts()
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Error toggling like", e)
                 _error.value = e.message
@@ -213,20 +217,11 @@ class HomeViewModel @Inject constructor(
             try {
                 val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return@launch
                 
-                // בדיקה אם המשתמש כבר שמר את הפוסט
-                val savedBy = post.savedBy.toMutableList()
-                val isAlreadySaved = savedBy.contains(currentUserId)
+                // קריאה לפונקציה הייעודית במקום updatePost
+                postRepository.savePost(post.id)
                 
-                if (isAlreadySaved) {
-                    savedBy.remove(currentUserId)
-                } else {
-                    savedBy.add(currentUserId)
-                }
-                
-                // עדכון הפוסט עם רשימת השמירות החדשה
-                val updatedPost = post.copy(savedBy = savedBy)
-                
-                postRepository.updatePost(updatedPost)
+                // רענון הפוסטים כדי לקבל את השינויים
+                refreshPosts()
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Error toggling save", e)
                 _error.value = e.message

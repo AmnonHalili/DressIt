@@ -39,8 +39,20 @@ class CommentAdapter(
         private val deleteButton: ImageButton = itemView.findViewById(R.id.delete_comment_button)
 
         fun bind(comment: Comment) {
-            userName.text = comment.userName
+            // וידוא שיש שם משתמש תקף (אם חסר, נשים ברירת מחדל)
+            val displayName = if (comment.userName.isNotEmpty()) {
+                comment.userName
+            } else {
+                "משתמש אפליקציה"
+            }
+            
+            // הצגת שם המשתמש
+            userName.text = displayName
+            
+            // הצגת תוכן התגובה
             commentText.text = comment.text
+            
+            // הצגת זמן התגובה בפורמט הנדרש
             timestamp.text = formatTimestamp(comment.timestamp)
             
             // הצגת כפתור מחיקה רק אם המשתמש הנוכחי הוא בעל התגובה או בעל הפוסט
@@ -53,7 +65,8 @@ class CommentAdapter(
         }
         
         private fun formatTimestamp(timestamp: Long): String {
-            val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+            // פורמט פשוט וקריא: "12.06.2020 - 19:35"
+            val sdf = SimpleDateFormat("dd.MM.yyyy - HH:mm", Locale.getDefault())
             return sdf.format(Date(timestamp))
         }
     }

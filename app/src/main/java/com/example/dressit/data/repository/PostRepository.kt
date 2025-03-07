@@ -23,9 +23,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import com.example.dressit.data.model.Notification
 
 @Singleton
-class PostRepository @Inject constructor(private val context: Context) {
+class PostRepository @Inject constructor(
+    private val context: Context,
+    private val notificationRepository: NotificationRepository
+) {
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
@@ -233,6 +237,29 @@ class PostRepository @Inject constructor(private val context: Context) {
     suspend fun createPost(title: String, description: String, imageUri: Uri, rentalPrice: Double = 0.0, latitude: Double? = null, longitude: Double? = null): Post {
         val currentUser = auth.currentUser ?: throw Exception("User not logged in")
         
+        // נסיון לקבל שם משתמש מ-Firestore תחילה
+        var userName = ""
+        try {
+            val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
+            val firestoreUser = userDoc.toObject(com.example.dressit.data.model.User::class.java)
+            userName = firestoreUser?.username ?: ""
+            Log.d("PostRepository", "Got username from Firestore: '$userName'")
+        } catch (e: Exception) {
+            Log.e("PostRepository", "Error getting username from Firestore", e)
+        }
+        
+        // אם לא מצאנו בפיירסטור, ננסה מ-Auth
+        if (userName.isEmpty()) {
+            userName = currentUser.displayName ?: ""
+            Log.d("PostRepository", "Using displayName: '$userName'")
+        }
+        
+        // עדיין אין? ננסה אימייל או מזהה
+        if (userName.isEmpty()) {
+            userName = currentUser.email?.substringBefore("@") ?: "משתמש אפליקציה"
+            Log.d("PostRepository", "Using fallback username (email or default): '$userName'")
+        }
+        
         // Upload image with file extension and timestamp
         val timestamp = System.currentTimeMillis()
         val ref = storage.reference.child("images/posts/${timestamp}_${UUID.randomUUID()}.jpg")
@@ -243,7 +270,7 @@ class PostRepository @Inject constructor(private val context: Context) {
         val post = Post(
             id = UUID.randomUUID().toString(),
             userId = currentUser.uid,
-            userName = currentUser.displayName ?: "",
+            userName = userName,
             title = title,
             description = description,
             imageUrl = imageUrl,
@@ -351,9 +378,12 @@ class PostRepository @Inject constructor(private val context: Context) {
         val currentUser = auth.currentUser ?: throw Exception("User not logged in")
         val post = getPostById(postId) ?: throw Exception("Post not found")
         
+        Log.d("PostRepository", "Liking post: $postId by user: ${currentUser.uid}, post owner: ${post.userId}")
+        
         // בדיקה אם המשתמש כבר לחץ לייק
         if (post.likedBy.contains(currentUser.uid)) {
             // הסרת הלייק
+            Log.d("PostRepository", "User already liked this post, removing like")
             val updatedLikedBy = post.likedBy.filter { it != currentUser.uid }
             val updatedPost = post.copy(
                 likes = post.likes - 1,
@@ -369,6 +399,7 @@ class PostRepository @Inject constructor(private val context: Context) {
             return updatedPost
         } else {
             // הוספת לייק
+            Log.d("PostRepository", "Adding new like to post")
             val updatedLikedBy = post.likedBy + currentUser.uid
             val updatedPost = post.copy(
                 likes = post.likes + 1,
@@ -381,6 +412,46 @@ class PostRepository @Inject constructor(private val context: Context) {
             // עדכון בבסיס הנתונים המקומי
             postDao.updatePost(updatedPost)
             
+            // יצירת התראה על לייק - רק אם המשתמש שלחץ לייק אינו בעל הפוסט
+            if (post.userId != currentUser.uid) {
+                try {
+                    Log.d("PostRepository", "Creating like notification for user: ${post.userId}")
+                    
+                    // קבלת שם המשתמש הנוכחי
+                    var userName = currentUser.displayName ?: ""
+                    
+                    // אם אין שם משתמש ב-Auth, ננסה לקבל מ-Firestore
+                    if (userName.isEmpty()) {
+                        try {
+                            val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
+                            val firestoreUser = userDoc.toObject(com.example.dressit.data.model.User::class.java)
+                            userName = firestoreUser?.username ?: ""
+                        } catch (e: Exception) {
+                            Log.e("PostRepository", "Error getting username from Firestore", e)
+                        }
+                    }
+                    
+                    // אם עדיין אין שם, נשתמש במשהו בסיסי
+                    if (userName.isEmpty()) {
+                        userName = "משתמש אפליקציה"
+                    }
+                    
+                    withContext(Dispatchers.IO) {
+                        notificationRepository.createLikeNotification(
+                            post = updatedPost,
+                            likedByUserId = currentUser.uid,
+                            likedByUserName = userName
+                        )
+                    }
+                    Log.d("PostRepository", "Like notification created successfully")
+                } catch (e: Exception) {
+                    Log.e("PostRepository", "Error creating like notification", e)
+                    // נמשיך גם אם יצירת ההתראה נכשלה
+                }
+            } else {
+                Log.d("PostRepository", "No notification created - user liked their own post")
+            }
+            
             return updatedPost
         }
     }
@@ -390,11 +461,32 @@ class PostRepository @Inject constructor(private val context: Context) {
         val currentUser = auth.currentUser ?: throw Exception("User not logged in")
         val post = getPostById(postId) ?: throw Exception("Post not found")
         
+        // קבלת שם המשתמש הנוכחי
+        var userName = currentUser.displayName ?: ""
+        
+        // אם אין שם משתמש ב-Auth, ננסה לקבל מ-Firestore
+        if (userName.isEmpty()) {
+            try {
+                val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
+                val firestoreUser = userDoc.toObject(com.example.dressit.data.model.User::class.java)
+                userName = firestoreUser?.username ?: ""
+                Log.d("PostRepository", "Got username from Firestore: '$userName'")
+            } catch (e: Exception) {
+                Log.e("PostRepository", "Error getting username from Firestore", e)
+            }
+        }
+        
+        // אם עדיין אין שם, נשתמש באימייל או בשם ברירת מחדל
+        if (userName.isEmpty()) {
+            userName = currentUser.email?.substringBefore("@") ?: "משתמש אפליקציה"
+            Log.d("PostRepository", "Using fallback username: '$userName'")
+        }
+        
         // יצירת תגובה חדשה
         val newComment = Comment(
             id = UUID.randomUUID().toString(),
             userId = currentUser.uid,
-            userName = currentUser.displayName ?: "",
+            userName = userName,
             text = commentText,
             timestamp = System.currentTimeMillis()
         )
