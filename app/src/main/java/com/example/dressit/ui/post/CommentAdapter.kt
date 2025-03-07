@@ -6,11 +6,13 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
 import androidx.core.view.isVisible
+import androidx.navigation.findNavController
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.dressit.R
 import com.example.dressit.data.model.Comment
+import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -18,7 +20,8 @@ import java.util.Locale
 class CommentAdapter(
     private val currentUserId: String,
     private val postOwnerId: String,
-    private val onDeleteClick: (Comment) -> Unit
+    private val onDeleteClick: (Comment) -> Unit,
+    private val onUserNameClick: ((String) -> Unit)? = null
 ) : ListAdapter<Comment, CommentAdapter.CommentViewHolder>(CommentDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CommentViewHolder {
@@ -48,6 +51,24 @@ class CommentAdapter(
             
             // הצגת שם המשתמש
             userName.text = displayName
+            
+            // הוספת מאזין לחיצה לשם המשתמש
+            userName.setOnClickListener {
+                if (onUserNameClick != null) {
+                    // אם סופק מאזין חיצוני, נשתמש בו
+                    onUserNameClick.invoke(comment.userId)
+                } else {
+                    // אחרת, ננווט ישירות לפרופיל המשתמש
+                    if (comment.userId != FirebaseAuth.getInstance().currentUser?.uid) {
+                        // אם זה לא המשתמש הנוכחי, ננווט לפרופיל של המשתמש האחר
+                        val action = PostDetailFragmentDirections.actionPostDetailToProfileFragment(comment.userId)
+                        itemView.findNavController().navigate(action)
+                    } else {
+                        // אם זה המשתמש הנוכחי, ננווט לטאב של הפרופיל
+                        itemView.findNavController().navigate(R.id.profileFragment)
+                    }
+                }
+            }
             
             // הצגת תוכן התגובה
             commentText.text = comment.text

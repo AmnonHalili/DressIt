@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.navigation.NavController
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -29,7 +30,8 @@ class PostAdapter(
     private val onLikeClick: (Post) -> Unit,
     private val onCommentClick: (Post) -> Unit,
     private val onSaveClick: ((Post) -> Unit)? = null,
-    private val onChartClick: ((Post) -> Unit)? = null
+    private val onChartClick: ((Post) -> Unit)? = null,
+    private val onUserNameClick: ((String) -> Unit)? = null
 ) : ListAdapter<Post, PostAdapter.PostViewHolder>(PostDiffCallback()) {
 
     private val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
@@ -135,8 +137,22 @@ class PostAdapter(
                 
                 Log.d("PostAdapter", "Post ${post.id}: Using actual username: '$displayName' (original: '${post.userName}')")
                 
-                // הגדרת שם המשתמש וכותרת הפוסט בחלקים התחתונים
+                // הצגת שם המשתמש
                 tvUserName.text = displayName
+                
+                // הוספת מאזין לחיצה לשם המשתמש
+                tvUserName.setOnClickListener {
+                    if (onUserNameClick != null) {
+                        // אם סופק מאזין חיצוני, נשתמש בו
+                        onUserNameClick.invoke(post.userId)
+                    } else {
+                        // במצב זה, אנחנו לא יכולים לנווט ישירות
+                        // וההורה שלנו צריך לספק פונקציית onUserNameClick
+                        Log.w("PostAdapter", "onUserNameClick is null, navigation not possible")
+                    }
+                }
+                
+                // הגדרת כותרת הפוסט בחלקים התחתונים
                 tvTitle.text = post.title
                 
                 // הגדרת התיאור (מוסתר כברירת מחדל)

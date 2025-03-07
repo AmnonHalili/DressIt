@@ -39,6 +39,9 @@
         <action
             android:id="@+id/action_navigation_home_to_post_detail_fragment"
             app:destination="@id/postDetailFragment" />
+        <action
+            android:id="@+id/action_navigation_home_to_profile_fragment"
+            app:destination="@id/profileFragment" />
     </fragment>
 
     <fragment
@@ -48,6 +51,9 @@
         <action
             android:id="@+id/action_navigation_saved_to_post_detail_fragment"
             app:destination="@id/postDetailFragment" />
+        <action
+            android:id="@+id/action_navigation_saved_to_profile_fragment"
+            app:destination="@id/profileFragment" />
     </fragment>
 
     <fragment
@@ -85,6 +91,10 @@
             app:destination="@id/loginFragment"
             app:popUpTo="@id/homeFragment"
             app:popUpToInclusive="true" />
+        <argument
+            android:name="userId"
+            android:defaultValue=""
+            app:argType="string" />
     </fragment>
 
     <fragment
@@ -101,6 +111,9 @@
         <action
             android:id="@+id/action_post_detail_to_edit_post"
             app:destination="@id/editPostFragment" />
+        <action
+            android:id="@+id/action_post_detail_to_profile_fragment"
+            app:destination="@id/profileFragment" />
     </fragment>
 
     <fragment

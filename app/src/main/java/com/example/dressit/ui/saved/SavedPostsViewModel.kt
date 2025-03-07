@@ -108,19 +108,31 @@ class SavedPostsViewModel @Inject constructor(
     }
     
     fun savePost(postId: String) {
+        _error.value = null
         viewModelScope.launch {
             try {
-                val updatedPost = postRepository.savePost(postId)
-                
-                // עדכן את המצב המקומי של הפוסטים כדי לשקף את השינוי מיד
-                _posts.value = _posts.value?.map { post ->
-                    if (post.id == postId) updatedPost else post
+                val post = postRepository.getPostById(postId)
+                if (post != null) {
+                    postRepository.savePost(postId)
+                    refreshSavedPosts()
                 }
-                
-                // רענון הפוסטים מהשרת
-                refreshSavedPosts()
             } catch (e: Exception) {
-                _error.postValue(e.message ?: "Failed to save post")
+                _error.value = e.message
+            }
+        }
+    }
+
+    fun unsavePost(postId: String) {
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val post = postRepository.getPostById(postId)
+                if (post != null) {
+                    postRepository.unsavePost(postId)
+                    refreshSavedPosts()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
             }
         }
     }

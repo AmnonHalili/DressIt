@@ -36,6 +36,12 @@ class ProfileViewModel @Inject constructor(
     private val _user = MutableLiveData<User?>()
     val user: LiveData<User?> = _user
 
+    private val _currentUser = MutableLiveData<User>()
+    val currentUser: LiveData<User> = _currentUser
+
+    private val _otherUser = MutableLiveData<User>()
+    val otherUser: LiveData<User> = _otherUser
+
     private val _posts = MutableLiveData<List<Post>>(emptyList())
     val posts: LiveData<List<Post>> = _posts
 
@@ -61,10 +67,31 @@ class ProfileViewModel @Inject constructor(
                 _loading.value = true
                 val user = userRepository.getCurrentUser()
                 _user.value = user
+                _currentUser.value = user
 
                 // טעינת הפוסטים של המשתמש הנוכחי
                 auth.currentUser?.let { currentUser ->
                     loadUserPosts(currentUser.uid)
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+    fun loadUserProfile(userId: String) {
+        viewModelScope.launch {
+            try {
+                _loading.value = true
+                val user = userRepository.getUserById(userId)
+                user?.let {
+                    _otherUser.value = it
+                    // טעינת הפוסטים של המשתמש
+                    loadUserPosts(userId)
+                } ?: run {
+                    _error.value = "User not found"
                 }
             } catch (e: Exception) {
                 _error.value = e.message

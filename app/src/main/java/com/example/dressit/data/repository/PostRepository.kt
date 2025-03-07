@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import com.example.dressit.data.model.Notification
+import com.google.firebase.firestore.FieldValue
 
 @Singleton
 class PostRepository @Inject constructor(
@@ -533,35 +534,67 @@ class PostRepository @Inject constructor(
     
     // פונקציה לשמירת פוסט
     suspend fun savePost(postId: String): Post {
-        val currentUser = auth.currentUser ?: throw Exception("User not logged in")
-        val post = getPostById(postId) ?: throw Exception("Post not found")
+        val currentUserId = auth.currentUser?.uid
+            ?: throw Exception("User not logged in")
         
-        // בדיקה אם המשתמש כבר שמר את הפוסט
-        if (post.savedBy.contains(currentUser.uid)) {
-            // הסרת השמירה
-            val updatedSavedBy = post.savedBy.filter { it != currentUser.uid }
-            val updatedPost = post.copy(savedBy = updatedSavedBy)
+        // עדכון בשרת
+        val postRef = firestore.collection("posts").document(postId)
+        
+        val post = postRef.get().await().toObject(Post::class.java)
+            ?: throw Exception("Post not found")
             
-            // עדכון ב-Firestore
-            firestore.collection("posts").document(postId).set(updatedPost).await()
+        // בדיקה אם הפוסט כבר שמור
+        if (post.savedBy.contains(currentUserId)) {
+            // הסר מהשמורים
+            postRef.update("savedBy", FieldValue.arrayRemove(currentUserId)).await()
             
-            // עדכון בבסיס הנתונים המקומי
+            // הסר גם מבסיס הנתונים המקומי
+            val updatedPost = post.copy(
+                savedBy = post.savedBy.filter { it != currentUserId }
+            )
             postDao.updatePost(updatedPost)
             
             return updatedPost
         } else {
-            // הוספת שמירה
-            val updatedSavedBy = post.savedBy + currentUser.uid
-            val updatedPost = post.copy(savedBy = updatedSavedBy)
-            
-            // עדכון ב-Firestore
-            firestore.collection("posts").document(postId).set(updatedPost).await()
+            // הוסף לשמורים
+            postRef.update("savedBy", FieldValue.arrayUnion(currentUserId)).await()
             
             // עדכון בבסיס הנתונים המקומי
+            val updatedPost = post.copy(
+                savedBy = post.savedBy + currentUserId
+            )
             postDao.updatePost(updatedPost)
             
             return updatedPost
         }
+    }
+
+    // הסרת פוסט מהשמורים
+    suspend fun unsavePost(postId: String): Post {
+        val currentUserId = auth.currentUser?.uid
+            ?: throw Exception("User not logged in")
+        
+        // עדכון בשרת
+        val postRef = firestore.collection("posts").document(postId)
+        
+        val post = postRef.get().await().toObject(Post::class.java)
+            ?: throw Exception("Post not found")
+            
+        // בדיקה אם הפוסט שמור
+        if (post.savedBy.contains(currentUserId)) {
+            // הסר מהשמורים
+            postRef.update("savedBy", FieldValue.arrayRemove(currentUserId)).await()
+            
+            // הסר גם מבסיס הנתונים המקומי
+            val updatedPost = post.copy(
+                savedBy = post.savedBy.filter { it != currentUserId }
+            )
+            postDao.updatePost(updatedPost)
+            
+            return updatedPost
+        }
+        
+        return post
     }
 
     // פונקציה לרענון פוסטים שמורים

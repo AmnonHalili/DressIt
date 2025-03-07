@@ -10,11 +10,14 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
+import androidx.navigation.fragment.navArgs
 import com.bumptech.glide.Glide
 import com.example.dressit.R
+import com.example.dressit.data.model.User
 import com.example.dressit.databinding.FragmentProfileBinding
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.tabs.TabLayoutMediator
+import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -24,6 +27,24 @@ class ProfileFragment : Fragment() {
 
     private val viewModel: ProfileViewModel by viewModels()
     private lateinit var profilePagerAdapter: ProfilePagerAdapter
+    
+    private val args: ProfileFragmentArgs by navArgs()
+    private var isCurrentUserProfile = true
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // בדיקה האם מדובר בפרופיל של המשתמש הנוכחי או של משתמש אחר
+        val userId = args.userId
+        if (userId.isNotEmpty() && userId != FirebaseAuth.getInstance().currentUser?.uid) {
+            isCurrentUserProfile = false
+            viewModel.loadUserProfile(userId)
+        } else {
+            isCurrentUserProfile = true
+        }
+        
+        setHasOptionsMenu(isCurrentUserProfile)
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -31,15 +52,20 @@ class ProfileFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentProfileBinding.inflate(inflater, container, false)
-        setHasOptionsMenu(true)
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setupViews()
+        
+        setupTabs()
         setupObservers()
-        viewModel.loadUserProfile()
+        
+        // הצגת/הסתרת כפתורי העריכה אם זה פרופיל של משתמש אחר
+        if (!isCurrentUserProfile) {
+            binding.editProfileButton.visibility = View.GONE
+            binding.settingsButton.visibility = View.GONE
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
@@ -70,7 +96,7 @@ class ProfileFragment : Fragment() {
         dialog.show()
     }
 
-    private fun setupViews() {
+    private fun setupTabs() {
         profilePagerAdapter = ProfilePagerAdapter(this)
         binding.viewPager.adapter = profilePagerAdapter
 
@@ -122,19 +148,13 @@ class ProfileFragment : Fragment() {
     }
 
     private fun setupObservers() {
-        viewModel.user.observe(viewLifecycleOwner) { user ->
-            user?.let {
-                binding.apply {
-                    topUsername.text = it.username
-                    username.text = it.username
-                    bio.text = it.bio
-
-                    Glide.with(requireContext())
-                        .load(it.profilePicture)
-                        .placeholder(R.drawable.profile_placeholder)
-                        .circleCrop()
-                        .into(profileImage)
-                }
+        if (isCurrentUserProfile) {
+            viewModel.currentUser.observe(viewLifecycleOwner) { user ->
+                updateUI(user)
+            }
+        } else {
+            viewModel.otherUser.observe(viewLifecycleOwner) { user ->
+                updateUI(user)
             }
         }
 
@@ -156,6 +176,20 @@ class ProfileFragment : Fragment() {
             errorMessage?.let {
                 Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG).show()
             }
+        }
+    }
+
+    private fun updateUI(user: User) {
+        binding.apply {
+            topUsername.text = user.username
+            username.text = user.username
+            bio.text = user.bio
+
+            Glide.with(requireContext())
+                .load(user.profilePicture)
+                .placeholder(R.drawable.profile_placeholder)
+                .circleCrop()
+                .into(profileImage)
         }
     }
 

@@ -192,9 +192,8 @@ class BookingAdapter(
                 approveButton.visibility = if (showApproveReject) View.VISIBLE else View.GONE
                 rejectButton.visibility = if (showApproveReject) View.VISIBLE else View.GONE
 
-                // כפתור ביטול מוצג רק לשוכר ורק אם ההזמנה ממתינה לאישור או מאושרת
-                val showCancel = isRenter && (booking.status == BookingStatus.PENDING || booking.status == BookingStatus.APPROVED)
-                cancelButton.visibility = if (showCancel) View.VISIBLE else View.GONE
+                // כפתור ביטול מוסתר תמיד - הוסר בהתאם לדרישה
+                cancelButton.visibility = View.GONE
 
                 // הצגת פרטי המשתמש השני
                 if (isOwner) {

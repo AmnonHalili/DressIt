@@ -29,6 +29,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.example.dressit.ui.post.DateRangePickerDialog
+import com.google.firebase.auth.FirebaseAuth
 
 @AndroidEntryPoint
 class HomeFragment : Fragment() {
@@ -118,7 +119,6 @@ class HomeFragment : Fragment() {
     private fun setupRecyclerView() {
         postAdapter = PostAdapter(
             onPostClick = { post ->
-                // ניווט לפרטי הפוסט
                 val action = HomeFragmentDirections.actionNavigationHomeToPostDetailFragment(post.id)
                 findNavController().navigate(action)
             },
@@ -126,15 +126,26 @@ class HomeFragment : Fragment() {
                 viewModel.toggleLike(post)
             },
             onCommentClick = { post ->
-                val action = HomeFragmentDirections.actionNavigationHomeToPostDetailFragment(post.id)
+                val action = HomeFragmentDirections.actionNavigationHomeToPostDetailFragment(post.id, true)
                 findNavController().navigate(action)
             },
             onSaveClick = { post ->
                 viewModel.toggleSave(post)
             },
             onChartClick = { post ->
-                // פתיחת דיאלוג בחירת תאריכים
-                showDateRangePicker(post)
+                // בדיקה אם המשתמש הנוכחי הוא בעל הפוסט
+                val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                if (post.userId == currentUserId) {
+                    // אם המשתמש הוא בעל הפוסט, מציגים הודעה שלא ניתן להשכיר שמלות שהמשתמש עצמו פרסם
+                    Snackbar.make(binding.root, "לא ניתן להשכיר שמלות שאתה פרסמת", Snackbar.LENGTH_SHORT).show()
+                } else {
+                    // אם המשתמש אינו בעל הפוסט, מציגים את דיאלוג בחירת התאריכים
+                    showDateRangePicker(post)
+                }
+            },
+            onUserNameClick = { userId ->
+                val action = HomeFragmentDirections.actionNavigationHomeToProfileFragment(userId)
+                findNavController().navigate(action)
             }
         )
         

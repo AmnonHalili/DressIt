@@ -171,6 +171,7 @@
                 android:layout_height="wrap_content"
                 android:text="ביטול"
                 android:textColor="@color/status_canceled"
+                android:visibility="gone"
                 app:strokeColor="@color/status_canceled" />
 
             <com.google.android.material.button.MaterialButton

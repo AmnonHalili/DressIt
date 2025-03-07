@@ -141,7 +141,10 @@
                 android:layout_marginTop="0dp"
                 android:textStyle="bold"
                 android:textSize="14sp"
-                android:textColor="@android:color/black"
+                android:textColor="@color/purple_500"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
                 tools:text="Noa_Levy" />
 
             <!-- כותרת הפוסט -->

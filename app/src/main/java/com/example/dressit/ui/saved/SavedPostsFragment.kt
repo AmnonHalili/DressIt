@@ -48,6 +48,7 @@ class SavedPostsFragment : Fragment() {
     
     private fun setupRecyclerView() {
         Log.d("SavedPostsFragment", "Setting up RecyclerView")
+        
         postAdapter = PostAdapter(
             onPostClick = { post ->
                 Log.d("SavedPostsFragment", "Post clicked: ${post.id}")
@@ -76,15 +77,12 @@ class SavedPostsFragment : Fragment() {
             },
             onSaveClick = { post ->
                 Log.d("SavedPostsFragment", "Save clicked for post: ${post.id}")
-                viewModel.savePost(post.id)
-                val currentUserId = viewModel.getCurrentUserId()
-                val isSaved = post.savedBy.contains(currentUserId)
-                val message = if (isSaved) {
-                    "הפוסט הוסר מהשמורים"
-                } else {
-                    "הפוסט נשמר בהצלחה"
-                }
-                Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
+                viewModel.unsavePost(post.id)
+                Snackbar.make(binding.root, "הפוסט הוסר מהשמורים", Snackbar.LENGTH_SHORT).show()
+            },
+            onUserNameClick = { userId ->
+                val action = SavedPostsFragmentDirections.actionNavigationSavedToProfileFragment(userId)
+                findNavController().navigate(action)
             }
         )
 
