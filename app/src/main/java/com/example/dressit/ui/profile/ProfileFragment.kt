@@ -161,8 +161,6 @@ class ProfileFragment : Fragment() {
         viewModel.stats.observe(viewLifecycleOwner) { stats ->
             binding.apply {
                 postsCount.text = stats.postsCount.toString()
-                followersCount.text = formatCount(stats.followersCount)
-                followingCount.text = stats.followingCount.toString()
             }
         }
 
@@ -190,14 +188,6 @@ class ProfileFragment : Fragment() {
                 .placeholder(R.drawable.profile_placeholder)
                 .circleCrop()
                 .into(profileImage)
-        }
-    }
-
-    private fun formatCount(count: Int): String {
-        return when {
-            count >= 1000000 -> String.format("%.1fM", count / 1000000.0)
-            count >= 1000 -> String.format("%.1fK", count / 1000.0)
-            else -> count.toString()
         }
     }
 

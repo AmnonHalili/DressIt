@@ -3,12 +3,12 @@
     <item
         android:id="@+id/homeFragment"
         android:icon="@drawable/ic_home"
-        android:title="Home" />
+        android:title="בית" />
 
     <item
         android:id="@+id/savedPostsFragment"
         android:icon="@drawable/ic_bookmark"
-        android:title="Saved" />
+        android:title="שמורים" />
 
     <item
         android:id="@+id/addPostFragment"
@@ -18,10 +18,10 @@
     <item
         android:id="@+id/chartFragment"
         android:icon="@drawable/ic_calendar"
-        android:title="Chart" />
+        android:title="הזמנות" />
 
     <item
         android:id="@+id/profileFragment"
         android:icon="@drawable/ic_profile"
-        android:title="Profile" />
+        android:title="פרופיל" />
 </menu> 

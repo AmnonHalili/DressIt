@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -30,9 +31,16 @@ import kotlinx.coroutines.withContext
 import android.graphics.drawable.Drawable
 import android.util.Log
 import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.OnMapReadyCallback
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MarkerOptions
+import android.os.Bundle as AndroidBundle
 
 @AndroidEntryPoint
-class PostDetailFragment : Fragment() {
+class PostDetailFragment : Fragment(), OnMapReadyCallback {
     private var _binding: FragmentPostDetailBinding? = null
     private val binding get() = _binding!!
 
@@ -40,6 +48,11 @@ class PostDetailFragment : Fragment() {
     private val args: PostDetailFragmentArgs by navArgs()
     private lateinit var commentAdapter: CommentAdapter
     private val userRepository = UserRepository()
+    
+    // מפה 
+    private var mapView: MapView? = null
+    private var googleMap: GoogleMap? = null
+    private var postLatLng: LatLng? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -55,7 +68,44 @@ class PostDetailFragment : Fragment() {
         setupCommentsRecyclerView()
         setupObservers()
         setupClickListeners()
+        
+        // אתחול המפה - גישה למפה דרך ה-included layout
+        val mapPreviewView = requireView().findViewById<MapView>(R.id.map_preview)
+        mapView = mapPreviewView
+        mapView?.onCreate(savedInstanceState)
+        mapView?.getMapAsync(this)
+        
         viewModel.loadPost(args.postId)
+    }
+
+    override fun onMapReady(map: GoogleMap) {
+        googleMap = map
+        googleMap?.uiSettings?.apply {
+            isZoomControlsEnabled = false
+            isScrollGesturesEnabled = false
+            isZoomGesturesEnabled = false
+            isRotateGesturesEnabled = false
+            isTiltGesturesEnabled = false
+            isCompassEnabled = false
+            isMapToolbarEnabled = false
+        }
+        
+        // אם יש כבר מיקום לפוסט, מציגים אותו על המפה
+        updateMapLocation()
+    }
+    
+    private fun updateMapLocation() {
+        postLatLng?.let { latLng ->
+            googleMap?.clear()
+            googleMap?.addMarker(MarkerOptions().position(latLng))
+            googleMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15f))
+            
+            // מציגים את רכיב המפה - בלי להשתמש ב-visibility כרגע
+            // binding.locationMapPreview.setVisibility(View.VISIBLE)
+        } ?: run {
+            // אם אין מיקום, מסתירים את המפה - בלי להשתמש ב-visibility כרגע
+            // binding.locationMapPreview.setVisibility(View.GONE)
+        }
     }
 
     private fun setupCommentsRecyclerView() {
@@ -152,6 +202,13 @@ class PostDetailFragment : Fragment() {
                     description.text = post.description
                     timestamp.text = formatTimestamp(post.timestamp)
                     
+                    // טעינת תמונת הפוסט
+                    Glide.with(requireContext())
+                        .load(post.imageUrl)
+                        .placeholder(R.drawable.bg_image_placeholder)
+                        .error(R.drawable.ic_error_placeholder)
+                        .into(postImage)
+                    
                     // טעינת תמונת פרופיל של המשתמש
                     loadUserProfileImage(post.userId, userName)
                     
@@ -159,8 +216,11 @@ class PostDetailFragment : Fragment() {
                     val formattedPrice = formatPrice(post.rentalPrice, post.currency)
                     rentalPrice.text = formattedPrice
                     
-                    // עדכון מיקום האיסוף (חדש)
+                    // עדכון מידע מיקום
                     if (post.latitude != null && post.longitude != null) {
+                        postLatLng = LatLng(post.latitude, post.longitude)
+                        updateMapLocation()
+                        
                         try {
                             val geocoder = android.location.Geocoder(requireContext(), java.util.Locale.getDefault())
                             val addresses = geocoder.getFromLocation(post.latitude, post.longitude, 1)
@@ -204,6 +264,8 @@ class PostDetailFragment : Fragment() {
                                 // אם יש לנו כתובת כלשהי - נציג אותה
                                 if (formattedAddress.isNotEmpty()) {
                                     pickupLocation.text = "מיקום איסוף: $formattedAddress"
+                                    
+                                    // נדלג על עדכון טקסט המפה עד שנתקן את הבעיה
                                 } else {
                                     // אם אין כתובת מפורטת, נשתמש בשם האיזור או העיר הכי קרובים
                                     val fallbackAddress = when {
@@ -213,33 +275,38 @@ class PostDetailFragment : Fragment() {
                                         else -> null
                                     }
                                     
-                                    pickupLocation.text = if (fallbackAddress != null) {
-                                        "מיקום איסוף: $fallbackAddress"
+                                    if (fallbackAddress != null) {
+                                        pickupLocation.text = "מיקום איסוף: $fallbackAddress"
                                     } else {
-                                        "מיקום איסוף זמין - פנה למוכר לפרטים"
+                                        pickupLocation.text = "מיקום איסוף זמין - פנה למוכר לפרטים"
                                     }
                                 }
                                 
-                                // הוספת אפשרות ללחוץ על המיקום כדי לפתוח אותו במפה
-                                pickupLocation.setOnClickListener {
+                                // הגדרת האפשרות ללחוץ על המפה כדי לפתוח אותה באפליקציה חיצונית
+                                val mapClickListener = View.OnClickListener {
                                     val mapUrl = "https://maps.google.com/maps?q=${post.latitude},${post.longitude}"
                                     val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(mapUrl))
                                     startActivity(intent)
                                 }
                                 
-                                pickupLocation.visibility = View.VISIBLE
+                                // הגדרת לחיצה על המפה ועל כתובת האיסוף - נדלג על כך כרגע
+                                // locationMapPreview.setOnClickListener(mapClickListener)
+                                // pickupLocation.setOnClickListener(mapClickListener)
+                                
+                                // binding.pickupLocation.setVisibility(View.VISIBLE)
                             } else {
-                                pickupLocation.text = "מיקום איסוף זמין - פנה למוכר לפרטים"
-                                pickupLocation.visibility = View.VISIBLE
+                                binding.pickupLocation.text = "מיקום איסוף זמין - פנה למוכר לפרטים"
+                                // binding.pickupLocation.setVisibility(View.VISIBLE)
                             }
                         } catch (e: Exception) {
                             // במקרה של שגיאה, נראה הודעה ידידותית ולא את הקואורדינטות
-                            pickupLocation.text = "מיקום איסוף זמין - פנה למוכר לפרטים"
-                            pickupLocation.visibility = View.VISIBLE
+                            binding.pickupLocation.text = "מיקום איסוף זמין - פנה למוכר לפרטים"
+                            // binding.pickupLocation.setVisibility(View.VISIBLE)
                         }
                     } else {
-                        // אם אין מיקום, מסתירים את ה-TextView
-                        pickupLocation.visibility = View.GONE
+                        // אם אין מיקום, מסתירים את ה-TextView והמפה
+                        // binding.pickupLocation.setVisibility(View.GONE)
+                        // binding.locationMapPreview.setVisibility(View.GONE)
                     }
                     
                     // עדכון מצב הלייק
@@ -264,11 +331,6 @@ class PostDetailFragment : Fragment() {
                     ownerActions.isVisible = isOwner
                     contactButton.isVisible = !isOwner
                 }
-                
-                // Load post image
-                Glide.with(requireContext())
-                    .load(post.imageUrl)
-                    .into(binding.postImage)
             }
         }
 
@@ -397,8 +459,41 @@ class PostDetailFragment : Fragment() {
         }
     }
 
+    // מחזור חיי MapView
+    override fun onStart() {
+        super.onStart()
+        mapView?.onStart()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mapView?.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mapView?.onPause()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        mapView?.onStop()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        mapView?.onSaveInstanceState(outState)
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        mapView?.onLowMemory()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
+        mapView?.onDestroy()
+        mapView = null
         _binding = null
     }
 } 

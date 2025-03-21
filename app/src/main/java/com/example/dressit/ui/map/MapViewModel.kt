@@ -15,6 +15,10 @@ class MapViewModel : BaseViewModel() {
 
     private val _posts = MutableLiveData<List<Post>>()
     val posts: LiveData<List<Post>> = _posts
+    
+    // מיפוי של פוסטים לפי מזהה, לשימוש עם המרקרים
+    private val _postMap = MutableLiveData<Map<String, Post>>()
+    val postMap: LiveData<Map<String, Post>> = _postMap
 
     init {
         loadPosts()
@@ -24,8 +28,12 @@ class MapViewModel : BaseViewModel() {
         launchWithLoading {
             repository.getAllPosts()
                 .onEach { posts ->
-                    // Filter out posts without location
-                    _posts.value = posts.filter { it.latitude != null && it.longitude != null }
+                    // פילטור פוסטים ללא מיקום
+                    val postsWithLocation = posts.filter { it.latitude != null && it.longitude != null }
+                    _posts.value = postsWithLocation
+                    
+                    // בניית מיפוי של פוסטים לפי מזהה
+                    _postMap.value = postsWithLocation.associateBy { it.id }
                 }
                 .catch { exception ->
                     handleError(exception as Exception)

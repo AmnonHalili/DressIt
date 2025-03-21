@@ -20,9 +20,7 @@ import android.util.Log
 import javax.inject.Inject
 
 data class ProfileStats(
-    val postsCount: Int = 0,
-    val followersCount: Int = 0,
-    val followingCount: Int = 0
+    val postsCount: Int = 0
 )
 
 @HiltViewModel
@@ -120,22 +118,9 @@ class ProfileViewModel @Inject constructor(
     private fun updateStats(postsCount: Int) {
         viewModelScope.launch {
             try {
-                // קבלת המשתמש הנוכחי
-                val user = _user.value
-                
-                if (user != null) {
-                    _stats.value = ProfileStats(
-                        postsCount = postsCount,
-                        followersCount = user.followers.size,
-                        followingCount = user.following.size
-                    )
-                } else {
-                    _stats.value = ProfileStats(
-                        postsCount = postsCount,
-                        followersCount = 0,
-                        followingCount = 0
-                    )
-                }
+                _stats.value = ProfileStats(
+                    postsCount = postsCount
+                )
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Error updating stats", e)
             }
@@ -191,46 +176,5 @@ class ProfileViewModel @Inject constructor(
         // מחיקת הסשן השמור
         authManager.clearSession()
         _loggedOut.value = true
-    }
-
-    // פונקציה לעקיבה אחרי משתמש
-    fun followUser(userId: String) {
-        viewModelScope.launch {
-            try {
-                val result = userRepository.followUser(userId)
-                
-                if (result) {
-                    // רענון נתוני המשתמש
-                    loadUserProfile()
-                } else {
-                    _error.value = "Failed to follow user"
-                }
-            } catch (e: Exception) {
-                _error.value = e.message
-            }
-        }
-    }
-
-    // פונקציה להפסקת עקיבה אחרי משתמש
-    fun unfollowUser(userId: String) {
-        viewModelScope.launch {
-            try {
-                val result = userRepository.unfollowUser(userId)
-                
-                if (result) {
-                    // רענון נתוני המשתמש
-                    loadUserProfile()
-                } else {
-                    _error.value = "Failed to unfollow user"
-                }
-            } catch (e: Exception) {
-                _error.value = e.message
-            }
-        }
-    }
-
-    // פונקציה לבדיקה האם המשתמש הנוכחי עוקב אחרי משתמש מסוים
-    suspend fun isFollowing(userId: String): Boolean {
-        return userRepository.isFollowing(userId)
     }
 } 

@@ -57,20 +57,42 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNav.setupWithNavController(navController)
         Log.d("MainActivity", "Bottom navigation setup complete")
 
+        // הגדרת לחיצה על כפתור המפה
+        binding.mapButton.setOnClickListener {
+            try {
+                Log.d("MainActivity", "Map button clicked")
+                navController.navigate(R.id.mapFragment)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error navigating to map fragment", e)
+                Snackbar.make(
+                    binding.root,
+                    "שגיאה בניווט למפה",
+                    Snackbar.LENGTH_SHORT
+                ).show()
+            }
+        }
+
         // בדיקת מצב התחברות והפניה למסך המתאים
         checkAuthState(navController)
 
-        // Hide bottom navigation on auth screens
+        // Hide bottom navigation on auth screens and adjust map button visibility
         navController.addOnDestinationChangedListener { _, destination, _ ->
             Log.d("MainActivity", "Navigation destination changed to: ${destination.label}")
             when (destination.id) {
                 R.id.loginFragment, R.id.registerFragment -> {
                     Log.d("MainActivity", "Hiding bottom navigation for auth screen")
                     binding.bottomNav.visibility = View.GONE
+                    binding.mapButton.visibility = View.GONE
+                }
+                R.id.profileFragment -> {
+                    // הסתר את כפתור המפה במסך הפרופיל כדי שלא יסתיר אלמנטים אחרים
+                    binding.bottomNav.visibility = View.VISIBLE
+                    binding.mapButton.visibility = View.GONE
                 }
                 else -> {
                     Log.d("MainActivity", "Showing bottom navigation")
                     binding.bottomNav.visibility = View.VISIBLE
+                    binding.mapButton.visibility = View.VISIBLE
                 }
             }
         }
