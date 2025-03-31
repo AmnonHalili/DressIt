@@ -16,5 +16,3 @@ DressIt Android App
 
 
 
-Figma:
-![Uploading image.png…]()
